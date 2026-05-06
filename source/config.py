@@ -103,3 +103,50 @@ DATASET_CONFIGS = {
         'n_epochs_sag': 90,
     },
 }
+
+# ---------------------------------------------------------------------------
+# Neural Network (Non-convex) Configurations
+# ---------------------------------------------------------------------------
+# Architecture: 1 hidden layer (100 nodes), Sigmoid, Softmax output (10 nodes)
+# For non-convex, SVRG uses m = 5n (as recommended in the paper)
+
+NN_CONFIGS = {
+    'mnist_nn': {
+        'lam': 1e-4,
+        'n_hidden': 100,
+        'n_classes': 10,
+        # SVRG
+        'svrg_lr': 0.025,
+        'svrg_m_factor': 5,           # m = 5 * n (non-convex)
+        # SGD constant
+        'sgd_const_lr': 0.01,
+        # SGD best (decaying)
+        'sgd_best_lr0': 0.1,
+        'sgd_best_a': 1.0,
+        # Warm-start
+        'warm_start_epochs': 10,
+        'warm_start_lr': 0.01,
+        # Epochs
+        'n_outer': 30,
+        'n_epochs_sgd': 90,
+    },
+    'cifar10_nn': {
+        'lam': 1e-3,
+        'n_hidden': 100,
+        'n_classes': 10,
+        # SVRG
+        'svrg_lr': 0.01,
+        'svrg_m_factor': 5,           # m = 5 * n (non-convex)
+        # SGD constant
+        'sgd_const_lr': 0.01,
+        # SGD best (decaying)
+        'sgd_best_lr0': 0.1,
+        'sgd_best_a': 1.0,
+        # Warm-start
+        'warm_start_epochs': 10,
+        'warm_start_lr': 0.01,
+        # Epochs
+        'n_outer': 30,
+        'n_epochs_sgd': 90,
+    },
+}
