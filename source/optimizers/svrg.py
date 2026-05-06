@@ -16,7 +16,8 @@ from models.logistic import sigmoid
 # SVRG for Binary Logistic Regression
 # ---------------------------------------------------------------------------
 
-def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I'):
+def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
+                           track_variance=False):
     """One outer iteration of SVRG for binary logistic regression.
 
     Uses scalar storage optimization: precompute phi'(w_tilde^T x_i) for all i
@@ -30,9 +31,11 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I'):
         lam: L2 regularization strength
         m: number of inner loop iterations (typically 2n)
         option: 'I' (w_tilde = w_m) or 'II' (random w_t from history)
+        track_variance: if True, compute and return gradient variance estimate
 
     Returns:
         updated w_tilde for next outer iteration
+        (if track_variance, also returns variance estimate)
     """
     n = len(y)
 
@@ -53,6 +56,10 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I'):
     if option == 'II':
         w_history = [w.copy()]
 
+    # Variance tracking
+    variance_sum = 0.0
+    variance_count = 0
+
     for t in range(m):
         i = np.random.randint(n)
         xi = X[i]          # (d,) — dense 1D array
@@ -66,25 +73,42 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I'):
         # = phi'_i(z_i) * x_i + lam * w_tilde
         g_snapshot = phi_prime_tilde[i] * xi + lam * w_tilde
 
-        # SVRG update: w = w - lr * (g_current - g_snapshot + mu)
-        w = w - lr * (g_current - g_snapshot + mu)
+        # SVRG update direction: v = g_current - g_snapshot + mu
+        v = g_current - g_snapshot + mu
+
+        # Track variance: Var[v] = E[||v - E[v]||²]
+        # Since E[v] ≈ mu (full gradient at current snapshot),
+        # we estimate variance as average squared deviation from mu
+        if track_variance:
+            diff = v - mu
+            variance_sum += np.dot(diff, diff)
+            variance_count += 1
+
+        # SVRG update: w = w - lr * v
+        w = w - lr * v
 
         if option == 'II':
             w_history.append(w.copy())
 
     # ── Step 3: Update snapshot ──
     if option == 'I':
-        return w
+        result = w
     else:  # Option II: random pick from {w_0, ..., w_m}
         idx = np.random.randint(m + 1)
-        return w_history[idx]
+        result = w_history[idx]
+
+    if track_variance:
+        variance_estimate = variance_sum / max(variance_count, 1)
+        return result, variance_estimate
+    return result
 
 
 # ---------------------------------------------------------------------------
 # SVRG for Multi-class Logistic Regression
 # ---------------------------------------------------------------------------
 
-def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I'):
+def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
+                               track_variance=False):
     """One outer iteration of SVRG for multi-class logistic regression.
 
     For multi-class with K classes, W is (d, K).
@@ -98,9 +122,11 @@ def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I'):
         lam: L2 regularization
         m: inner loop length
         option: 'I' or 'II'
+        track_variance: if True, compute and return gradient variance estimate
 
     Returns:
         updated W_tilde
+        (if track_variance, also returns variance estimate)
     """
     n = len(y)
     K = W_tilde.shape[1]
@@ -126,6 +152,10 @@ def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I'):
     if option == 'II':
         W_history = [W.copy()]
 
+    # Variance tracking
+    variance_sum = 0.0
+    variance_count = 0
+
     for t in range(m):
         i = np.random.randint(n)
         xi = X[i]          # (d,)
@@ -144,24 +174,39 @@ def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I'):
         # nabla psi_i(W_tilde) — using precomputed probabilities
         g_snapshot = np.outer(xi, probs_tilde[i] - e_yi) + lam * W_tilde  # (d, K)
 
+        # SVRG update direction
+        v = g_current - g_snapshot + mu
+
+        # Track variance: Var[v] = E[||v - E[v]||²]
+        if track_variance:
+            diff = v - mu
+            variance_sum += np.sum(diff * diff)
+            variance_count += 1
+
         # SVRG update
-        W = W - lr * (g_current - g_snapshot + mu)
+        W = W - lr * v
 
         if option == 'II':
             W_history.append(W.copy())
 
     if option == 'I':
-        return W
+        result = W
     else:
         idx = np.random.randint(m + 1)
-        return W_history[idx]
+        result = W_history[idx]
+
+    if track_variance:
+        variance_estimate = variance_sum / max(variance_count, 1)
+        return result, variance_estimate
+    return result
 
 
 # ---------------------------------------------------------------------------
 # Unified Interface
 # ---------------------------------------------------------------------------
 
-def svrg_outer_loop(w, X, y, lr, lam, m, multiclass=False, option='I'):
+def svrg_outer_loop(w, X, y, lr, lam, m, multiclass=False, option='I',
+                    track_variance=False):
     """One outer iteration of SVRG.
 
     Args:
@@ -173,13 +218,17 @@ def svrg_outer_loop(w, X, y, lr, lam, m, multiclass=False, option='I'):
         m: inner loop length
         multiclass: multi-class flag
         option: 'I' or 'II'
+        track_variance: if True, compute and return gradient variance estimate
 
     Returns:
         updated weights
+        (if track_variance, also returns variance estimate)
     """
     if multiclass:
-        return svrg_outer_loop_multiclass(w, X, y, lr, lam, m, option)
-    return svrg_outer_loop_binary(w, X, y, lr, lam, m, option)
+        return svrg_outer_loop_multiclass(w, X, y, lr, lam, m, option,
+                                          track_variance)
+    return svrg_outer_loop_binary(w, X, y, lr, lam, m, option,
+                                  track_variance)
 
 
 def effective_passes_svrg(n, m):
