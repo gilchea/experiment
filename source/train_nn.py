@@ -188,7 +188,7 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
     with open(filepath, 'w') as f:
         json.dump(results, f, indent=2,
                   default=lambda x: float(x) if x is not None else None)
-    print(f"\n  ✓ Results saved to {filepath}")
+    print(f"\n  [V] Results saved to {filepath}")
 
     return results
 

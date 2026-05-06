@@ -4,4 +4,7 @@ data
 .SKILLS
 SVRG-Pytorch
 __init__.py
-.pkl
+
+# không push các file .pkl và file output
+*.pkl
+*.pdf
