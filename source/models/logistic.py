@@ -50,7 +50,8 @@ def loss_binary(w, X, y, lam):
     """
     n = len(y)
     margins = y * (X @ w)               # (n,)
-    log_part = np.log1p(np.exp(-margins))
+    # Numerically stable log(1 + exp(-z))
+    log_part = np.log1p(np.exp(-np.abs(margins))) + np.maximum(0, -margins)
     return np.mean(log_part) + 0.5 * lam * np.dot(w, w)
 
 
@@ -113,15 +114,14 @@ def loss_multiclass(W, X, y, lam):
     K = W.shape[1]
     logits = X @ W                          # (n, K)
 
-    # Log-softmax for numerical stability
+    # Log-sum-exp stability for cross-entropy
     logits_max = np.max(logits, axis=1, keepdims=True)
-    log_probs = logits - logits_max
-    log_probs -= np.log(np.sum(np.exp(log_probs), axis=1, keepdims=True))
-
-    correct_log_probs = log_probs[np.arange(n), y]
-    loss = -np.mean(correct_log_probs)
+    log_sum_exp = logits_max + np.log(np.sum(np.exp(logits - logits_max), axis=1, keepdims=True))
+    
+    # Loss = average over i of [log(sum(exp(logits))) - logits[y_i]]
+    loss_data = np.mean(log_sum_exp.ravel() - logits[np.arange(n), y])
     reg = 0.5 * lam * np.sum(W * W)
-    return loss + reg
+    return loss_data + reg
 
 
 def full_grad_multiclass(W, X, y, lam):

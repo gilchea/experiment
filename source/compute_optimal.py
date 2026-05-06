@@ -82,7 +82,7 @@ def compute_all_optimal():
 
     for name, lam, multiclass in configs:
         print(f"\n{'='*60}")
-        print(f"Computing P(w*) for {name} (λ={lam}, multiclass={multiclass})")
+        print(f"Computing P(w*) for {name} (lam={lam}, multiclass={multiclass})")
         print(f"{'='*60}")
 
         X_train, y_train, _, _ = load_dataset(name)
@@ -92,6 +92,8 @@ def compute_all_optimal():
         # Adjust learning rate based on dataset size
         if name == 'covtype':
             lr = 0.01   # Large n, need smaller step
+        elif name == 'cifar10':
+            lr = 0.01   # Multiclass on CIFAR-10 can be unstable with 0.1
         elif name == 'rcv1':
             lr = 0.05
         else:
@@ -115,7 +117,7 @@ def compute_all_optimal():
             'final_loss': float(loss_hist[-1]),
         }
 
-        print(f"  ✓ P(w*) = {P_star:.12f}")
+        print(f"  [V] P(w*) = {P_star:.12f}")
 
     return results
 

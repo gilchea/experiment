@@ -11,7 +11,7 @@ import gzip
 from sklearn.datasets import load_svmlight_file
 from sklearn.model_selection import train_test_split
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), '..', 'data')
 
 
 # ---------------------------------------------------------------------------
@@ -48,11 +48,11 @@ def load_mnist():
     X_train: (60000, 784) float64 in [0, 1]
     y_train: (60000,) int64  {0..9}
     """
-    base = os.path.join(DATA_DIR, 'mnist')
-    X_train = _read_idx_images(os.path.join(base, 'train-images-idx3-ubyte.gz'))
-    y_train = _read_idx_labels(os.path.join(base, 'train-labels-idx1-ubyte.gz'))
-    X_test = _read_idx_images(os.path.join(base, 't10k-images-idx3-ubyte.gz'))
-    y_test = _read_idx_labels(os.path.join(base, 't10k-labels-idx1-ubyte.gz'))
+    base = r"d:\Khóa luận tốt nghiệp\experiment\data\mnist"
+    X_train = _read_idx_images(os.path.join(base,'train-images-idx3-ubyte', 'train-images.idx3-ubyte'))
+    y_train = _read_idx_labels(os.path.join(base, 'train-labels-idx1-ubyte', 'train-labels.idx1-ubyte'))
+    X_test = _read_idx_images(os.path.join(base, 't10k-images-idx3-ubyte', 't10k-images.idx3-ubyte'))
+    y_test = _read_idx_labels(os.path.join(base, 't10k-labels-idx1-ubyte', 't10k-labels.idx1-ubyte'))
     return X_train, y_train, X_test, y_test
 
 
