@@ -162,31 +162,46 @@ def sgd_epoch_decay(w, X, y, lr0, lam, t, a):
 
 ### Bước 4: `optimizers/svrg.py` ← **Quan trọng nhất**
 
-Implement chính xác **Algorithm 1** của paper:
+Implement chính xác **Algorithm 1** với tối ưu hóa bộ nhớ (Scalar Storage):
 
 ```python
-def svrg_outer_loop(w_tilde, X, y, lr, lam, m):
+def svrg_outer_loop(w_tilde, X, y, lr, lam, m, option='I'):
     """
     1 outer iteration của SVRG.
-    Chi phí: n (full grad) + 2m (inner loop) gradient evaluations
-    = (1 + 2m/n) effective passes
+    Tối ưu: Lưu scalar derivatives để tiết kiệm tính toán trong inner loop.
     """
     n = len(y)
-
-    # --- Bước 1: Tính full gradient tại snapshot ---
-    mu = full_grad(w_tilde, X, y, lam)        # O(n) evals
-
+    
+    # --- Bước 1: Tính full gradient & lưu scalars ---
+    # Gradient Logistic: grad_i = phi_i'(w_tilde^T x_i) * x_i + lam * w_tilde
+    z_tilde = X @ w_tilde
+    phi_prime_tilde = -y * sigmoid(-y * z_tilde) 
+    
+    mu = (X.T @ phi_prime_tilde) / n + lam * w_tilde
+    
     # --- Bước 2: Inner loop m bước ---
     w = w_tilde.copy()
+    w_history = [w.copy()] # Dùng cho Option II
+    
     for t in range(m):
         i = np.random.randint(n)
-        g_current  = stoch_grad(w, X[i], y[i], lam)
-        g_snapshot = stoch_grad(w_tilde, X[i], y[i], lam)
-        # Bước cập nhật variance-reduced
+        xi, yi = X[i], y[i]
+        
+        # ∇psi_i(w)
+        g_current = (-yi * sigmoid(-yi * (xi @ w))) * xi + lam * w
+        
+        # ∇psi_i(w_tilde) - Dùng scalar đã lưu, không tính lại sigmoid/dot product
+        g_snapshot = phi_prime_tilde[i] * xi + lam * w_tilde
+        
+        # Cập nhật
         w = w - lr * (g_current - g_snapshot + mu)
+        if option == 'II': w_history.append(w.copy())
 
-    # Option I: w̃_next = w_m
-    return w
+    # Cập nhật snapshot cho epoch sau
+    if option == 'I':
+        return w
+    else: # Option II: Randomly pick from history
+        return w_history[np.random.randint(m + 1)]
 ```
 
 **Tính toán effective passes** cho mỗi outer iteration:
@@ -273,12 +288,8 @@ Bước 7: plot_results.py
 
 | Bẫy | Giải thích | Fix |
 |---|---|---|
-| **Không warm-start** | SVRG hội tụ chậm nếu bắt đầu xa w* | Chạy 1 epoch SGD trước |
-| **Đếm sai effective passes** | Mỗi outer iteration SVRG = 3 passes (m=2n), không phải 1 | `passes += 1 + m/n` |
-| **Không tính P(w*)** | Loss residual cần P(w*) để vẽ | Chạy GD riêng để estimate |
-| **Sparse matrix với numpy** | RCV1 sparse, `X @ w` cần dùng `.dot()` hoặc scipy | Kiểm tra type trước |
-| **Gradient regularizer** | λw phải có trong MỌI gradient call (full và stochastic) | Không bỏ sót |
-| **Option I vs II** | Cài Option I (w̃ = w_m) cho convex theo paper | `return w` ở cuối inner loop |
+| **Option I vs II** | Paper so sánh cả hai. Cài Option I (w̃ = w_m) làm mặc định, Option II (ngẫu nhiên) cho phân tích lý thuyết | `option='I'` |
+| **Warm-start** | **Bắt buộc**: 1 epoch cho convex, 10 epoch cho neural network | Chạy SGD trước |
 
 ---
 
