@@ -93,8 +93,8 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
     # ── Step 3: Update snapshot ──
     if option == 'I':
         result = w
-    else:  # Option II: random pick from {w_0, ..., w_m}
-        idx = np.random.randint(m + 1)
+    else:  # Option II: random pick from {w_0, ..., w_{m-1}} per spec
+        idx = np.random.randint(m)
         result = w_history[idx]
 
     if track_variance:
@@ -192,7 +192,7 @@ def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
     if option == 'I':
         result = W
     else:
-        idx = np.random.randint(m + 1)
+        idx = np.random.randint(m)    # {w_0, ..., w_{m-1}} per spec
         result = W_history[idx]
 
     if track_variance:

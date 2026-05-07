@@ -9,7 +9,9 @@ hidden layer.
 The algorithm follows the same structure as the convex SVRG:
   Algorithm 1 from Johnson & Zhang (NIPS 2013)
 
-For non-convex problems, the paper recommends m = 5n (instead of 2n for convex).
+Per IMPLEMENT.md:
+  - Non-convex: m = 5n, mini-batch size = 10 for inner loop.
+  - Warm-start: 10 epochs SGD before SVRG.
 """
 
 import numpy as np
@@ -19,18 +21,21 @@ from models.neural_net import (
 
 
 def svrg_nn_outer_loop(params, X, y, lr, lam, m, option='I',
-                       track_variance=False):
+                       track_variance=False, batch_size=10):
     """One outer iteration of SVRG for the neural network.
 
+    Per IMPLEMENT.md §3: inner loop uses mini-batch size = 10 for NN.
+
     Args:
-        params: dict with 'W1', 'b1', 'W2', 'b2'
-        X: feature matrix (n, d)
-        y: label vector (n,) with values in {0, ..., K-1}
-        lr: step size eta (constant)
-        lam: L2 regularization strength
-        m: number of inner loop iterations (paper: 5n for non-convex)
-        option: 'I' (params = w_m) or 'II' (random w_t from history)
+        params     : dict with 'W1', 'b1', 'W2', 'b2'
+        X          : feature matrix (n, d)
+        y          : label vector (n,) with values in {0, ..., K-1}
+        lr         : step size eta (constant)
+        lam        : L2 regularization strength
+        m          : number of inner loop iterations (paper: 5n for non-convex)
+        option     : 'I' (params = w_m) or 'II' (random w_t from {w_0,...,w_{m-1}})
         track_variance: if True, compute and return gradient variance estimate
+        batch_size : mini-batch size for inner loop (10 per IMPLEMENT.md)
 
     Returns:
         updated params for next outer iteration
@@ -39,6 +44,7 @@ def svrg_nn_outer_loop(params, X, y, lr, lam, m, option='I',
     n = len(y)
 
     # ── Step 1: Compute full gradient mu_tilde ──
+    # Full gradient is always computed on the entire dataset
     mu = full_grad(params, X, y, lam)
 
     # ── Step 2: Inner loop ──
@@ -52,14 +58,15 @@ def svrg_nn_outer_loop(params, X, y, lr, lam, m, option='I',
     variance_count = 0
 
     for t in range(m):
-        i = np.random.randint(n)
-        xi = X[i]
-        yi = y[i]
+        # Sample mini-batch of size batch_size (per IMPLEMENT.md §3: size=10 for NN)
+        batch_idx = np.random.randint(n, size=batch_size)
+        xi = X[batch_idx]    # (batch_size, d)
+        yi = y[batch_idx]    # (batch_size,)
 
-        # ∇ψ_i(w) — stochastic gradient at current iterate
+        # ∇ψ_batch(w) — stochastic gradient at current iterate
         g_current = stoch_grad(w, xi, yi, lam)
 
-        # ∇ψ_i(w_tilde) — stochastic gradient at snapshot
+        # ∇ψ_batch(w_tilde) — stochastic gradient at snapshot
         g_snapshot = stoch_grad(params, xi, yi, lam)
 
         # SVRG update direction: v = g_current - g_snapshot + mu
@@ -68,7 +75,6 @@ def svrg_nn_outer_loop(params, X, y, lr, lam, m, option='I',
         # Track variance: E[||v - E[v]||²]
         if track_variance:
             diff = add_params(v, scale_params(mu, -1.0))
-            # Compute squared Frobenius norm across all parameter tensors
             sq_norm = sum(np.sum(d * d) for d in diff.values())
             variance_sum += sq_norm
             variance_count += 1
@@ -82,8 +88,8 @@ def svrg_nn_outer_loop(params, X, y, lr, lam, m, option='I',
     # ── Step 3: Update snapshot ──
     if option == 'I':
         result = w
-    else:  # Option II: random pick from {w_0, ..., w_m}
-        idx = np.random.randint(m + 1)
+    else:  # Option II: random pick from {w_0, ..., w_{m-1}} per spec
+        idx = np.random.randint(m)
         result = w_history[idx]
 
     if track_variance:
@@ -97,7 +103,8 @@ def effective_passes_svrg_nn(n, m):
 
     Each outer iteration costs:
     - 1 pass for full gradient computation
-    - m/n passes for inner loop
+    - m/n passes for inner loop (each step uses batch_size samples,
+      but cost is counted in gradient evaluations / n)
 
     Total = 1 + m/n
 

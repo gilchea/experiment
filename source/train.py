@@ -22,7 +22,7 @@ from models.logistic import loss
 from optimizers.sgd import sgd_epoch_constant, sgd_epoch_decay, warm_start
 from optimizers.svrg import svrg_outer_loop, effective_passes_svrg
 from optimizers.sdca import sdca_train
-from optimizers.sag import sag_train
+# from optimizers.sag import sag_train
 from config import DATASET_CONFIGS
 
 
@@ -280,7 +280,7 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
             clean_checkpoints('sgd_const', dataset_name, keep_last=2)
 
     # ── Run SGD (Best / Decaying eta) ──
-    print(f"\n  Running SGD-best (eta_0={config['sgd_best_lr0']}, a={config['sgd_best_a']})...")
+    print(f"\n  Running SGD-best (eta_0={config['sgd_best_lr0']}, b={config['sgd_best_b']})...")
     w_sgd_best = w.copy()
     effective_pass = config['warm_start_epochs']
     t = 0  # Total gradient evaluations
@@ -296,8 +296,9 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
             w_sgd_best, X_train, y_train,
             lr0=config['sgd_best_lr0'],
             lam=lam,
+            n=n,
             t_start=t,
-            a=config['sgd_best_a'],
+            b=config['sgd_best_b'],
             multiclass=multiclass,
         )
 
@@ -376,9 +377,9 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
             print(f"    SAG epoch {epoch+1:3d}: loss residual = {loss_curr - P_star:.2e}, "
                   f"test error = {err_curr:.2f}%")
 
-    w_sag = sag_train(X_train, y_train, lam, n_epochs_sag,
-                      multiclass=multiclass, lr=config['sag_lr'],
-                      callback=sag_callback)
+    # w_sag = sag_train(X_train, y_train, lam, n_epochs_sag,
+    #                   multiclass=multiclass, lr=config['sag_lr'],
+    #                   callback=sag_callback)
 
     # ── Save results ──
     os.makedirs(results_dir, exist_ok=True)

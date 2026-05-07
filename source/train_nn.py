@@ -150,7 +150,7 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
 
     # ── Run SGD (Best / Decaying eta) ──
     print(f"\n  Running SGD-best (eta_0={config['sgd_best_lr0']}, "
-          f"a={config['sgd_best_a']})...")
+          f"b={config['sgd_best_b']})...")
     w_sgd_best = copy_params(params)
     effective_pass = config['warm_start_epochs']
     t = 0
@@ -166,8 +166,9 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
             w_sgd_best, X_train, y_train,
             lr0=config['sgd_best_lr0'],
             lam=lam,
+            n=n,
             t_start=t,
-            a=config['sgd_best_a'],
+            b=config['sgd_best_b'],
         )
 
         effective_pass += 1.0

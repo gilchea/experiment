@@ -1,9 +1,13 @@
 """
 sgd.py — SGD Baselines (Constant & Decaying Learning Rates)
 
-Implements two SGD variants used as baselines in the paper:
-1. SGD (Constant eta): Fixed learning rate throughout training
-2. SGD (Best / Decaying): eta_t = eta_0 / (1 + a * eta_0 * t)
+Implements two SGD variants used as baselines in the paper (NIPS 2013):
+1. SGD (Constant): Fixed learning rate throughout training.
+2. SGD-best (Decaying): t-inverse schedule eta(t) = eta_0 / (1 + b * t/n)
+
+Per PROCEDURE_SGD_.md:
+    - Batch size = 1 for convex problems (logistic regression).
+    - X-axis in plots = #grad / n (effective passes).
 """
 
 import numpy as np
@@ -19,55 +23,51 @@ def _get_stoch_grad_fn(multiclass):
 # SGD with Constant Learning Rate
 # ---------------------------------------------------------------------------
 
-def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False, batch_size=1):
+def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False):
     """Run 1 epoch of SGD with constant learning rate.
 
+    Per spec: batch_size = 1, w^(t) = w^(t-1) - eta * grad_psi_i(w^(t-1))
+
     Args:
-        w: weight vector/matrix
-        X: feature matrix (n, d)
-        y: label vector (n,)
-        lr: constant learning rate
-        lam: L2 regularization strength
-        multiclass: whether multi-class
-        batch_size: mini-batch size (1 for pure SGD)
+        w          : weight vector/matrix
+        X          : feature matrix (n, d)
+        y          : label vector (n,)
+        lr         : constant learning rate eta
+        lam        : L2 regularization strength
+        multiclass : whether multi-class
 
     Returns:
         updated w after 1 epoch
     """
     n = len(y)
     stoch_grad = _get_stoch_grad_fn(multiclass)
-
     indices = np.random.permutation(n)
 
     for i in indices:
-        xi = X[i]
-        yi = y[i]
-        g = stoch_grad(w, xi, yi, lam)
+        g = stoch_grad(w, X[i], y[i], lam)
         w = w - lr * g
 
     return w
 
 
-def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False,
-                 batch_size=1, callback=None):
+def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None):
     """Run multiple epochs of SGD with constant learning rate.
 
     Args:
-        w: initial weights
-        X: feature matrix
-        y: labels
-        lr: constant learning rate
-        lam: regularization
-        n_epochs: number of epochs to run
-        multiclass: multi-class flag
-        batch_size: mini-batch size
-        callback: optional function(w, epoch) called after each epoch
+        w          : initial weights
+        X          : feature matrix (n, d)
+        y          : labels (n,)
+        lr         : constant learning rate
+        lam        : regularization
+        n_epochs   : number of epochs
+        multiclass : multi-class flag
+        callback   : optional function(w, epoch) called after each epoch
 
     Returns:
         final weights
     """
     for epoch in range(n_epochs):
-        w = sgd_epoch_constant(w, X, y, lr, lam, multiclass, batch_size)
+        w = sgd_epoch_constant(w, X, y, lr, lam, multiclass)
         if callback:
             callback(w, epoch)
     return w
@@ -77,71 +77,63 @@ def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False,
 # SGD with Decaying Learning Rate  (SGD-best)
 # ---------------------------------------------------------------------------
 
-def sgd_epoch_decay(w, X, y, lr0, lam, t_start, a, multiclass=False, batch_size=1):
-    """Run 1 epoch of SGD with decaying learning rate.
+def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False):
+    """Run 1 epoch of SGD with t-inverse decaying learning rate.
 
-    Learning rate schedule: eta(t) = eta_0 / (1 + a * eta_0 * t)
-    where t = total gradient evaluations so far.
+    Per PROCEDURE_SGD_.md, t-inverse schedule:
+        eta(t) = eta_0 / (1 + b * t / n)
+    where t = total gradient steps so far, n = dataset size.
 
     Args:
-        w: weight vector/matrix
-        X: feature matrix (n, d)
-        y: label vector (n,)
-        lr0: initial learning rate eta_0
-        lam: L2 regularization strength
-        t_start: total gradient evaluations before this epoch
-        a: decay parameter
-        multiclass: whether multi-class
-        batch_size: mini-batch size
+        w          : weight vector/matrix
+        X          : feature matrix (n, d)
+        y          : label vector (n,)
+        lr0        : initial learning rate eta_0
+        lam        : L2 regularization strength
+        n          : dataset size (used for normalizing t in schedule)
+        t_start    : total gradient steps before this epoch
+        b          : decay parameter
+        multiclass : whether multi-class
 
     Returns:
-        (updated w, t_end) where t_end = t_start + n/batch_size
+        (updated w, t_end)
     """
-    n = len(y)
     stoch_grad = _get_stoch_grad_fn(multiclass)
-
     indices = np.random.permutation(n)
     t = t_start
 
     for i in indices:
-        # Current learning rate
-        lr_t = lr0 / (1.0 + a * lr0 * t)
-
-        xi = X[i]
-        yi = y[i]
-        g = stoch_grad(w, xi, yi, lam)
+        lr_t = lr0 / (1.0 + b * t / n)    # t-inverse schedule per spec
+        g = stoch_grad(w, X[i], y[i], lam)
         w = w - lr_t * g
-
         t += 1
 
     return w, t
 
 
-def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False,
-              batch_size=1, callback=None):
-    """Run multiple epochs of SGD with decaying learning rate.
+def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False, callback=None):
+    """Run multiple epochs of SGD with t-inverse decaying learning rate.
 
     Args:
-        w: initial weights
-        X: feature matrix
-        y: labels
-        lr0: initial learning rate
-        lam: regularization
-        n_epochs: number of epochs
-        a: decay parameter
-        multiclass: multi-class flag
-        batch_size: mini-batch size
-        callback: optional function(w, epoch, lr_current)
+        w          : initial weights
+        X          : feature matrix (n, d)
+        y          : labels (n,)
+        lr0        : initial learning rate eta_0
+        lam        : regularization
+        n_epochs   : number of epochs
+        b          : decay parameter
+        multiclass : multi-class flag
+        callback   : optional function(w, epoch) called after each epoch
 
     Returns:
         final weights
     """
+    n = len(y)
     t = 0
     for epoch in range(n_epochs):
-        w, t = sgd_epoch_decay(w, X, y, lr0, lam, t, a, multiclass, batch_size)
+        w, t = sgd_epoch_decay(w, X, y, lr0, lam, n, t, b, multiclass)
         if callback:
-            lr_current = lr0 / (1.0 + a * lr0 * t)
-            callback(w, epoch, lr_current)
+            callback(w, epoch)
     return w
 
 
@@ -150,15 +142,15 @@ def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False,
 # ---------------------------------------------------------------------------
 
 def warm_start(X, y, lam, multiclass=False, n_epochs=1, lr=0.01):
-    """Run SGD warm-start.
+    """Run SGD warm-start (1-10 epochs per paper setup).
 
     Args:
-        X: feature matrix
-        y: labels
-        lam: regularization
-        multiclass: multi-class flag
-        n_epochs: number of warm-start epochs (1 for convex, 10 for NN)
-        lr: learning rate for warm-start
+        X          : feature matrix (n, d)
+        y          : labels (n,)
+        lam        : regularization
+        multiclass : multi-class flag
+        n_epochs   : number of warm-start epochs (1 for convex, 10 for NN)
+        lr         : learning rate for warm-start
 
     Returns:
         warmed-up weights
@@ -170,14 +162,13 @@ def warm_start(X, y, lam, multiclass=False, n_epochs=1, lr=0.01):
     else:
         w = np.zeros(d)
 
-    w = sgd_constant(w, X, y, lr, lam, n_epochs, multiclass)
-    return w
+    return sgd_constant(w, X, y, lr, lam, n_epochs, multiclass)
 
 
 # ---------------------------------------------------------------------------
 # Effective Passes Counting
 # ---------------------------------------------------------------------------
 
-def count_effective_passes_sgd(n_epochs, n_samples):
-    """For SGD, 1 epoch = 1 effective pass."""
+def count_effective_passes_sgd(n_epochs):
+    """For SGD, 1 epoch = 1 effective pass (n grad evals / n)."""
     return n_epochs

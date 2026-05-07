@@ -9,7 +9,7 @@ print('train.py: OK - functions imported')
 # Verify config structure
 for name, cfg in DATASET_CONFIGS.items():
     required = ['lam', 'multiclass', 'svrg_lr', 'svrg_m_factor',
-                'sgd_const_lr', 'sgd_best_lr0', 'sgd_best_a',
+                'sgd_const_lr', 'sgd_best_lr0', 'sgd_best_b',
                 'warm_start_epochs', 'warm_start_lr', 'n_outer', 'n_epochs_sgd']
     missing = [k for k in required if k not in cfg]
     assert not missing, f'{name} missing: {missing}'

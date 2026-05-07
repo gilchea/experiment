@@ -16,7 +16,7 @@ DATASET_CONFIGS = {
         'sgd_const_lr': 0.01,
         # SGD best (decaying)
         'sgd_best_lr0': 0.1,
-        'sgd_best_a': 1.0,            # Tune this parameter
+        'sgd_best_b': 1.0,            # Tune this parameter
         # SDCA
         'sdca_lr': 1.0,
         # SAG
@@ -40,7 +40,7 @@ DATASET_CONFIGS = {
         'sgd_const_lr': 0.01,
         # SGD best (decaying)
         'sgd_best_lr0': 0.1,
-        'sgd_best_a': 1.0,
+        'sgd_best_b': 1.0,
         # SDCA
         'sdca_lr': 1.0,
         # SAG
@@ -64,7 +64,7 @@ DATASET_CONFIGS = {
         'sgd_const_lr': 0.001,
         # SGD best (decaying)
         'sgd_best_lr0': 0.01,
-        'sgd_best_a': 1.0,
+        'sgd_best_b': 1.0,
         # SDCA
         'sdca_lr': 1.0,
         # SAG
@@ -88,7 +88,7 @@ DATASET_CONFIGS = {
         'sgd_const_lr': 0.001,
         # SGD best (decaying)
         'sgd_best_lr0': 0.01,
-        'sgd_best_a': 1.0,
+        'sgd_best_b': 1.0,
         # SDCA
         'sdca_lr': 1.0,
         # SAG
@@ -122,7 +122,7 @@ NN_CONFIGS = {
         'sgd_const_lr': 0.01,
         # SGD best (decaying)
         'sgd_best_lr0': 0.1,
-        'sgd_best_a': 1.0,
+        'sgd_best_b': 1.0,
         # Warm-start
         'warm_start_epochs': 10,
         'warm_start_lr': 0.01,
@@ -141,7 +141,7 @@ NN_CONFIGS = {
         'sgd_const_lr': 0.01,
         # SGD best (decaying)
         'sgd_best_lr0': 0.1,
-        'sgd_best_a': 1.0,
+        'sgd_best_b': 1.0,
         # Warm-start
         'warm_start_epochs': 10,
         'warm_start_lr': 0.01,

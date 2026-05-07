@@ -1,14 +1,19 @@
 """
 sdca.py — Stochastic Dual Coordinate Ascent (SDCA)
 
-Implements SDCA for L2-regularized logistic regression, as described in:
-"Stochastic Dual Coordinate Ascent Methods for Regularized Loss Minimization"
-(Shalev-Shwartz & Zhang, 2013).
+Implements SDCA as described in PROCEDURE_SDCA.md (Section 4, NIPS 2013 SVRG paper),
+viewed as a variance-reduction method maintaining per-sample dual variables.
 
-SDCA solves the dual problem and maintains the primal-dual relationship:
-    w = (1/(λn)) Σ α_i y_i x_i
+Primal problem:
+    min_w P(w) = (1/n) Σ φ_i(w) + (λ/2) ||w||²
 
-Key advantage: O(n) memory (store dual variables α_i), linear convergence.
+Dual variables: α_i ∈ ℝ^d  for i = 1, ..., n
+Primal relationship:
+    w⁽⁰⁾ = Σ α_i⁽⁰⁾  (= 0 at initialization)
+
+Main loop (per step t, sample i):
+    α_i⁽ᵗ⁾ = α_i⁽ᵗ⁻¹⁾ - η_t * (∇φ_i(w⁽ᵗ⁻¹⁾) + λn · α_i⁽ᵗ⁻¹⁾)
+    w⁽ᵗ⁾  = w⁽ᵗ⁻¹⁾ + (α_i⁽ᵗ⁾ - α_i⁽ᵗ⁻¹⁾)
 """
 
 import numpy as np
@@ -16,22 +21,58 @@ from models.logistic import sigmoid
 
 
 # ---------------------------------------------------------------------------
-# SDCA for Binary Logistic Regression
+# Gradient helpers
 # ---------------------------------------------------------------------------
 
-def sdca_epoch_binary(alpha, w, X, y, lam, n):
+def _grad_logistic_binary(w, xi, yi):
+    """∇φ_i(w) for binary logistic loss: φ_i(w) = log(1 + exp(-y_i w^T x_i)).
+
+    ∇φ_i(w) = -y_i * (1 - σ(y_i w^T x_i)) * x_i
+             = (σ(w^T x_i) - [y_i == +1]) * x_i   (equivalent form)
+    """
+    margin = yi * (xi @ w)
+    # gradient of logistic loss w.r.t. w
+    return -(1.0 - sigmoid(margin)) * yi * xi
+
+
+def _grad_logistic_multiclass(W, xi, yi, K):
+    """∇φ_i(W) for multi-class logistic loss (cross-entropy).
+
+    Returns gradient of shape (d, K).
+    """
+    logits = xi @ W                        # (K,)
+    logits -= np.max(logits)               # numerical stability
+    exp_l = np.exp(logits)
+    probs = exp_l / exp_l.sum()            # (K,)
+
+    # one-hot target
+    target = np.zeros(K)
+    target[yi] = 1.0
+
+    # gradient: outer product of x_i and (probs - target)
+    # shape (d, K)
+    return np.outer(xi, probs - target)
+
+
+# ---------------------------------------------------------------------------
+# SDCA Epoch — Binary
+# ---------------------------------------------------------------------------
+
+def sdca_epoch_binary(alpha, w, X, y, lam, n, lr):
     """Run 1 epoch of SDCA for binary logistic regression.
 
-    Updates each dual variable α_i once per epoch using the SDCA update:
-        Δα = clip( (1 - σ(y_i w^T x_i) - α_i) / (||x_i||²/(λn) + 1), -α_i, 1-α_i )
+    Per PROCEDURE_SDCA.md:
+        α_i ← α_i - η * (∇φ_i(w) + λn · α_i)
+        w   ← w + (α_i_new - α_i_old)
 
     Args:
-        alpha: dual variables (n,)
-        w: primal weights (d,)
-        X: feature matrix (n, d)
-        y: labels (n,) in {-1, +1}
-        lam: L2 regularization
-        n: number of samples
+        alpha : dual variables (n, d)
+        w     : primal weights (d,)
+        X     : feature matrix (n, d)
+        y     : labels (n,) in {-1, +1}
+        lam   : L2 regularization λ
+        n     : number of samples
+        lr    : learning rate η
 
     Returns:
         (updated alpha, updated w)
@@ -39,50 +80,45 @@ def sdca_epoch_binary(alpha, w, X, y, lam, n):
     indices = np.random.permutation(n)
 
     for i in indices:
-        xi = X[i]
+        xi = X[i]          # (d,)
         yi = y[i]
 
-        # Current margin and probability
-        margin = yi * (xi @ w)
-        prob = sigmoid(margin)
+        # ∇φ_i(w): shape (d,)
+        grad = _grad_logistic_binary(w, xi, yi)
 
-        # Precompute ||x_i||² / (λn)
-        xi_norm_sq = xi @ xi
-        q_i = xi_norm_sq / (lam * n)
+        # Dual update: α_i ← α_i - η*(∇φ_i(w) + λn·α_i)
+        alpha_old = alpha[i].copy()
+        alpha[i] -= lr * (grad + lam * n * alpha[i])
 
-        # SDCA dual update
-        # Δα = (1 - prob - α_i) / (q_i + 1)
-        delta = (1.0 - prob - alpha[i]) / (q_i + 1.0)
-        delta = np.clip(delta, -alpha[i], 1.0 - alpha[i])
-
-        # Update dual variable
-        alpha[i] += delta
-
-        # Update primal: w += (Δα * yi / (λn)) * xi
-        w += (delta * yi / (lam * n)) * xi
+        # Primal update: w ← w + Δα_i
+        w += alpha[i] - alpha_old
 
     return alpha, w
 
 
-def sdca_binary(X, y, lam, n_epochs, callback=None):
-    """Run SDCA for binary logistic regression with per-epoch logging.
+def sdca_binary(X, y, lam, n_epochs, lr=None, callback=None):
+    """Run SDCA for binary logistic regression.
 
     Args:
-        X: feature matrix (n, d)
-        y: labels (n,) in {-1, +1}
-        lam: L2 regularization
-        n_epochs: number of epochs
-        callback: optional function(w, epoch) called after each epoch
+        X        : feature matrix (n, d)
+        y        : labels (n,) in {-1, +1}
+        lam      : L2 regularization λ
+        n_epochs : number of epochs
+        lr       : learning rate η (default: 1/(λn))
+        callback : optional function(w, epoch) called after each epoch
 
     Returns:
-        final primal weights w
+        final primal weights w (d,)
     """
     n, d = X.shape
-    alpha = np.zeros(n)
-    w = np.zeros(d)
+    alpha = np.zeros((n, d))   # α_i ∈ ℝ^d
+    w = np.zeros(d)             # w = Σ α_i = 0 at init
+
+    if lr is None:
+        lr = 1.0 / (lam * n)
 
     for epoch in range(n_epochs):
-        alpha, w = sdca_epoch_binary(alpha, w, X, y, lam, n)
+        alpha, w = sdca_epoch_binary(alpha, w, X, y, lam, n, lr)
         if callback:
             callback(w, epoch)
 
@@ -90,22 +126,25 @@ def sdca_binary(X, y, lam, n_epochs, callback=None):
 
 
 # ---------------------------------------------------------------------------
-# SDCA for Multi-class Logistic Regression
+# SDCA Epoch — Multi-class
 # ---------------------------------------------------------------------------
 
-def sdca_epoch_multiclass(alpha, W, X, y, lam, n, K):
+def sdca_epoch_multiclass(alpha, W, X, y, lam, n, K, lr):
     """Run 1 epoch of SDCA for multi-class logistic regression.
 
-    For each sample i, updates the K-dimensional dual variable α_i.
+    Per PROCEDURE_SDCA.md:
+        α_i ← α_i - η * (∇φ_i(W) + λn · α_i)    [shape (d, K)]
+        W   ← W + (α_i_new - α_i_old)
 
     Args:
-        alpha: dual variables (n, K)
-        W: primal weights (d, K)
-        X: feature matrix (n, d)
-        y: labels (n,) in {0, ..., K-1}
-        lam: L2 regularization
-        n: number of samples
-        K: number of classes
+        alpha : dual variables (n, d, K)
+        W     : primal weights (d, K)
+        X     : feature matrix (n, d)
+        y     : labels (n,) in {0, ..., K-1}
+        lam   : L2 regularization λ
+        n     : number of samples
+        K     : number of classes
+        lr    : learning rate η
 
     Returns:
         (updated alpha, updated W)
@@ -113,51 +152,46 @@ def sdca_epoch_multiclass(alpha, W, X, y, lam, n, K):
     indices = np.random.permutation(n)
 
     for i in indices:
-        xi = X[i]
+        xi = X[i]   # (d,)
         yi = y[i]
 
-        # Current logits and probabilities
-        logits = xi @ W
-        logits_stable = logits - np.max(logits)
-        exp_logits = np.exp(logits_stable)
-        probs = exp_logits / np.sum(exp_logits)
+        # ∇φ_i(W): shape (d, K)
+        grad = _grad_logistic_multiclass(W, xi, yi, K)
 
-        # Precompute ||x_i||² / (λn)
-        xi_norm_sq = xi @ xi
-        q_i = xi_norm_sq / (lam * n)
+        # Dual update: α_i ← α_i - η*(∇φ_i(W) + λn·α_i)
+        alpha_old = alpha[i].copy()   # (d, K)
+        alpha[i] -= lr * (grad + lam * n * alpha[i])
 
-        # Update each class coordinate
-        for k in range(K):
-            target = 1.0 if k == yi else 0.0
-            delta = (target - probs[k] - alpha[i, k]) / (q_i + 1.0)
-            delta = np.clip(delta, -alpha[i, k], 1.0 - alpha[i, k])
-
-            alpha[i, k] += delta
-            W[:, k] += (delta / (lam * n)) * xi
+        # Primal update: W ← W + Δα_i
+        W += alpha[i] - alpha_old
 
     return alpha, W
 
 
-def sdca_multiclass(X, y, lam, n_epochs, callback=None):
-    """Run SDCA for multi-class logistic regression with per-epoch logging.
+def sdca_multiclass(X, y, lam, n_epochs, lr=None, callback=None):
+    """Run SDCA for multi-class logistic regression.
 
     Args:
-        X: feature matrix (n, d)
-        y: labels (n,) in {0, ..., K-1}
-        lam: L2 regularization
-        n_epochs: number of epochs
-        callback: optional function(w, epoch) called after each epoch
+        X        : feature matrix (n, d)
+        y        : labels (n,) in {0, ..., K-1}
+        lam      : L2 regularization λ
+        n_epochs : number of epochs
+        lr       : learning rate η (default: 1/(λn))
+        callback : optional function(W, epoch) called after each epoch
 
     Returns:
         final primal weights W (d, K)
     """
     n, d = X.shape
     K = len(np.unique(y))
-    alpha = np.zeros((n, K))
-    W = np.zeros((d, K))
+    alpha = np.zeros((n, d, K))   # α_i ∈ ℝ^(d×K)
+    W = np.zeros((d, K))           # W = Σ α_i = 0 at init
+
+    if lr is None:
+        lr = 1.0 / (lam * n)
 
     for epoch in range(n_epochs):
-        alpha, W = sdca_epoch_multiclass(alpha, W, X, y, lam, n, K)
+        alpha, W = sdca_epoch_multiclass(alpha, W, X, y, lam, n, K, lr)
         if callback:
             callback(W, epoch)
 
@@ -168,21 +202,22 @@ def sdca_multiclass(X, y, lam, n_epochs, callback=None):
 # Unified Interface
 # ---------------------------------------------------------------------------
 
-def sdca_train(X, y, lam, n_epochs, multiclass=False, callback=None):
+def sdca_train(X, y, lam, n_epochs, lr=None, multiclass=False, callback=None):
     """Run SDCA for multiple epochs.
 
     Args:
-        X: feature matrix (n, d)
-        y: labels (n,)
-        lam: L2 regularization
-        n_epochs: number of epochs
-        multiclass: multi-class flag
-        callback: optional function(w, epoch) called after each epoch
+        X          : feature matrix (n, d)
+        y          : labels (n,)
+        lam        : L2 regularization λ
+        n_epochs   : number of epochs
+        lr         : learning rate η (default: 1/(λn))
+        multiclass : multi-class flag
+        callback   : optional function(w, epoch) called after each epoch
 
     Returns:
         final primal weights
     """
     if multiclass:
-        return sdca_multiclass(X, y, lam, n_epochs, callback)
+        return sdca_multiclass(X, y, lam, n_epochs, lr, callback)
     else:
-        return sdca_binary(X, y, lam, n_epochs, callback)
+        return sdca_binary(X, y, lam, n_epochs, lr, callback)
