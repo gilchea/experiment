@@ -400,6 +400,7 @@ def run_all_experiments():
 
     with open(optimal_path, 'r') as f:
         optimal_losses = json.load(f)
+        
 
     all_results = {}
     for dataset_name, config in DATASET_CONFIGS.items():

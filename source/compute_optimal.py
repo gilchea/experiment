@@ -47,14 +47,25 @@ def gd_solve(X, y, lam, multiclass=False, max_iter=2000, lr=0.1, tol=1e-14, verb
 
     for t in range(max_iter):
         g = grad_fn(w, X, y, lam)
-        w = w - lr * g
+        current_loss = loss_fn(w, X, y, lam)
+
+        # Backtracking line search (để tìm learning rate tự động tối ưu)
+        step = lr
+        for _ in range(20):
+            w_new = w - step * g
+            new_loss = loss_fn(w_new, X, y, lam)
+            # Điều kiện giảm Armijo
+            if new_loss <= current_loss - 0.5 * step * np.sum(g**2) or step < 1e-10:
+                break
+            step *= 0.5
+            
+        w = w_new
 
         if t % 100 == 0 or t == max_iter - 1:
-            current_loss = loss_fn(w, X, y, lam)
-            loss_history.append(current_loss)
+            loss_history.append(new_loss)
 
             if verbose:
-                print(f"  iter {t:4d}: loss = {current_loss:.12f}")
+                print(f"  iter {t:4d}: loss = {new_loss:.12f} (step = {step:.2e})")
 
             # Check convergence
             if len(loss_history) >= 2:
@@ -135,7 +146,63 @@ def load_optimal(filepath='results/optimal_loss.json'):
     with open(filepath, 'r') as f:
         return json.load(f)
 
+def compute_one(name, lam, multiclass):
+    X_train, y_train, _, _ = load_dataset(name)
+
+    if name == 'covtype':
+        lr = 0.01
+    elif name == 'cifar10':
+        lr = 0.01
+    elif name == 'rcv1':
+        lr = 0.05
+    else:
+        lr = 0.1
+
+    w_star, P_star, loss_hist = gd_solve(
+        X_train, y_train, lam,
+        multiclass=multiclass,
+        max_iter=2000,
+        lr=lr,
+        verbose=True,
+    )
+
+    return {
+        'P_star': float(P_star),
+        'lam': lam,
+        'multiclass': multiclass,
+        'n': X_train.shape[0],
+        'd': X_train.shape[1],
+        'loss_history': [float(v) for v in loss_hist],
+        'final_loss': float(loss_hist[-1]),
+    }
 
 if __name__ == '__main__':
     results = compute_all_optimal()
     save_optimal(results)
+
+# if __name__ == '__main__':
+#     filepath = 'results/optimal_loss.json'
+
+#     # Load file cũ (nếu có)
+#     if os.path.exists(filepath):
+#         results = load_optimal(filepath)
+#     else:
+#         results = {}
+
+#     # 👇 CHỈ ĐỔI TÊN DATASET BỊ SAI Ở ĐÂY
+#     name = 'covtype'   # ví dụ: mnist / cifar10 / rcv1 / covtype
+
+#     configs = {
+#         'mnist':   (1e-4, True),
+#         'cifar10': (1e-3, True),
+#         'rcv1':    (1e-5, False),
+#         'covtype': (1e-5, False),
+#     }
+
+#     lam, multiclass = configs[name]
+
+#     # 👇 chỉ chạy lại 1 dataset
+#     results[name] = compute_one(name, lam, multiclass)
+
+#     # save lại file
+#     save_optimal(results, filepath)
