@@ -4,7 +4,7 @@ data_loader.py — Load & Preprocess 4 Datasets (MNIST, CIFAR-10, RCV1, Covtype)
 Preprocessing follows data_exploration_preprocessing.ipynb (Section 9 summary):
   - MNIST    : divide by 255 → [0, 1]  
   - CIFAR-10 : divide by 255 → [0, 1] 
-  - RCV1     : giữ nguyên 
+  - RCV1     : MaxAbsScaler
   - Covtype  : dùng file data/covtype/covtype.libsvm.binary.scale/covtype.libsvm.binary.scale
                và chia 50/50 train/test
 
