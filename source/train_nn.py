@@ -30,7 +30,7 @@ from config import NN_CONFIGS
 # Main Experiment Runner
 # ---------------------------------------------------------------------------
 
-def run_nn_experiment(dataset_name, config, results_dir='results',
+def run_nn_experiment(dataset_name, config, P_star=None, results_dir='results',
                       save_ckpt_every=5):
     """Run full NN experiment for one dataset.
 
@@ -75,11 +75,14 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
     results = {
         'dataset': dataset_name,
         'config': {k: v for k, v in config.items()},
-        'svrg': {'passes': [], 'loss': [], 'test_error': [],
-                 'grad_variance': []},
-        'sgd_const': {'passes': [], 'loss': [], 'test_error': []},
-        'sgd_best': {'passes': [], 'loss': [], 'test_error': []},
+        'P_star': float(P_star) if P_star is not None else None,
+        'svrg': {'passes': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []},
+        'sgd_const': {'passes': [], 'loss_residual': [], 'test_error': []},
+        'sgd_best': {'passes': [], 'loss_residual': [], 'test_error': []},
     }
+
+    def _residual(loss_val):
+        return float(loss_val - P_star) if P_star is not None else float(loss_val)
 
     # ── Run SVRG ──
     m = config['svrg_m_factor'] * n
@@ -91,7 +94,7 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
     train_loss = loss(w_svrg, X_train, y_train, lam)
     test_err = compute_error(w_svrg, X_test, y_test)
     results['svrg']['passes'].append(effective_pass)
-    results['svrg']['loss'].append(float(train_loss))
+    results['svrg']['loss_residual'].append(_residual(train_loss))
     results['svrg']['test_error'].append(float(test_err))
     results['svrg']['grad_variance'].append(None)
 
@@ -105,12 +108,12 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
             track_variance=True,
         )
 
-        effective_pass += effective_passes_svrg_nn(n, m)
+        effective_pass += effective_passes_svrg_nn(n, m, batch_size=config.get('batch_size', 10))
         train_loss = loss(w_svrg, X_train, y_train, lam)
         test_err = compute_error(w_svrg, X_test, y_test)
 
         results['svrg']['passes'].append(effective_pass)
-        results['svrg']['loss'].append(float(train_loss))
+        results['svrg']['loss_residual'].append(_residual(train_loss))
         results['svrg']['test_error'].append(float(test_err))
         results['svrg']['grad_variance'].append(float(variance))
 
@@ -126,7 +129,7 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
     train_loss = loss(w_sgd_const, X_train, y_train, lam)
     test_err = compute_error(w_sgd_const, X_test, y_test)
     results['sgd_const']['passes'].append(effective_pass)
-    results['sgd_const']['loss'].append(float(train_loss))
+    results['sgd_const']['loss_residual'].append(_residual(train_loss))
     results['sgd_const']['test_error'].append(float(test_err))
 
     for epoch in range(config['n_epochs_sgd']):
@@ -141,7 +144,7 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
         test_err = compute_error(w_sgd_const, X_test, y_test)
 
         results['sgd_const']['passes'].append(effective_pass)
-        results['sgd_const']['loss'].append(float(train_loss))
+        results['sgd_const']['loss_residual'].append(_residual(train_loss))
         results['sgd_const']['test_error'].append(float(test_err))
 
         if (epoch + 1) % 10 == 0:
@@ -158,7 +161,7 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
     train_loss = loss(w_sgd_best, X_train, y_train, lam)
     test_err = compute_error(w_sgd_best, X_test, y_test)
     results['sgd_best']['passes'].append(effective_pass)
-    results['sgd_best']['loss'].append(float(train_loss))
+    results['sgd_best']['loss_residual'].append(_residual(train_loss))
     results['sgd_best']['test_error'].append(float(test_err))
 
     for epoch in range(config['n_epochs_sgd']):
@@ -176,7 +179,7 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
         test_err = compute_error(w_sgd_best, X_test, y_test)
 
         results['sgd_best']['passes'].append(effective_pass)
-        results['sgd_best']['loss'].append(float(train_loss))
+        results['sgd_best']['loss_residual'].append(_residual(train_loss))
         results['sgd_best']['test_error'].append(float(test_err))
 
         if (epoch + 1) % 10 == 0:
@@ -194,11 +197,21 @@ def run_nn_experiment(dataset_name, config, results_dir='results',
     return results
 
 
-def run_all_nn_experiments():
+def run_all_nn_experiments(optimal_path='results/optimal_loss.json'):
     """Run NN experiments for all configured datasets."""
+    import json, os
+    optimal_losses = {}
+    if os.path.exists(optimal_path):
+        with open(optimal_path) as f:
+            optimal_losses = json.load(f)
+    else:
+        print(f"  [!] {optimal_path} not found - logging raw loss instead of residual.")
+
     all_results = {}
     for dataset_name, config in NN_CONFIGS.items():
-        results = run_nn_experiment(dataset_name, config)
+        base_name = dataset_name.replace('_nn', '')
+        P_star = optimal_losses.get(base_name, {}).get('P_star', None)
+        results = run_nn_experiment(dataset_name, config, P_star=P_star)
         all_results[dataset_name] = results
     return all_results
 

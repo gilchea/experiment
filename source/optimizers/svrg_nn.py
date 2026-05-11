@@ -98,7 +98,7 @@ def svrg_nn_outer_loop(params, X, y, lr, lam, m, option='I',
     return result
 
 
-def effective_passes_svrg_nn(n, m):
+def effective_passes_svrg_nn(n, m, batch_size=10):
     """Compute effective passes for one SVRG outer iteration.
 
     Each outer iteration costs:
@@ -115,4 +115,5 @@ def effective_passes_svrg_nn(n, m):
     Returns:
         effective passes for one outer iteration
     """
-    return 1.0 + m / n
+    # return 1.0 + m / n
+    return 1.0 + 2.0 * m * batch_size / n

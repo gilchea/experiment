@@ -21,7 +21,7 @@ from utils.data_loader import load_dataset
 from models.logistic import loss
 from optimizers.sgd import sgd_epoch_constant, sgd_epoch_decay, warm_start
 from optimizers.svrg import svrg_outer_loop, effective_passes_svrg
-from optimizers.sdca import sdca_train
+from optimizers.sdca import sdca_train, count_effective_passes_sdca
 # from optimizers.sag import sag_train
 from config import DATASET_CONFIGS
 
@@ -333,7 +333,7 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
 
     def sdca_callback(w_curr, epoch):
         nonlocal effective_pass
-        effective_pass = config['warm_start_epochs'] + epoch + 1
+        effective_pass = config['warm_start_epochs'] + count_effective_passes_sdca(epoch + 1)
         loss_curr = loss(w_curr, X_train, y_train, lam, multiclass)
         err_curr = compute_test_error(w_curr, X_test, y_test, multiclass)
 

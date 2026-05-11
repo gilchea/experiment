@@ -108,7 +108,7 @@ def sgd_nn_epoch_decay(params, X, y, lr0, lam, n, t_start, b, batch_size=10):
         lr_t = lr0 / (1.0 + b * t / n)    # t-inverse schedule per spec
         g = stoch_grad(w, xi, yi, lam)
         w = add_params(w, scale_params(g, -lr_t))
-        t += 1
+        t += len(batch_idx)   # count samples, not mini-batch steps (consistent with convex SGD)
 
     return w, t
 

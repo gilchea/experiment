@@ -221,3 +221,17 @@ def sdca_train(X, y, lam, n_epochs, lr=None, multiclass=False, callback=None):
         return sdca_multiclass(X, y, lam, n_epochs, lr, callback)
     else:
         return sdca_binary(X, y, lam, n_epochs, lr, callback)
+
+def count_effective_passes_sdca(n_epochs):
+    """For SDCA, 1 epoch = 1 effective pass (n grad evals / n).
+
+    Unlike SVRG, SDCA has no inner loop — each epoch touches
+    all n samples exactly once, costing n gradient evaluations.
+
+    Args:
+        n_epochs: number of epochs run
+
+    Returns:
+        total effective passes (= n_epochs)
+    """
+    return n_epochs
