@@ -2,10 +2,11 @@
 data_loader.py — Load & Preprocess 4 Datasets (MNIST, CIFAR-10, RCV1, Covtype)
 
 Preprocessing follows data_exploration_preprocessing.ipynb (Section 9 summary):
-  - MNIST    : divide by 255 → [0, 1]  (min-max)
-  - CIFAR-10 : per-channel Z-score (fit on train, apply to test)
-  - RCV1     : MaxAbsScaler (preserves sparsity)
-  - Covtype  : MaxAbsScaler (preserves sparsity) + 50/50 train/test split
+  - MNIST    : divide by 255 → [0, 1]  
+  - CIFAR-10 : divide by 255 → [0, 1] 
+  - RCV1     : giữ nguyên 
+  - Covtype  : dùng file data/covtype/covtype.libsvm.binary.scale/covtype.libsvm.binary.scale
+               và chia 50/50 train/test
 
 All loaders return (X_train, y_train, X_test, y_test).
 """
@@ -106,7 +107,7 @@ def _cifar_normalize(X, ch_stats):
 
 
 def load_cifar10():
-    """Load CIFAR-10, normalize with per-channel Z-score (fit on train).
+    """Load CIFAR-10, normalize by /255 → [0, 1].
 
     Returns:
         X_train : (50000, 3072) float64
@@ -122,21 +123,21 @@ def load_cifar10():
         X_train_list.append(X)
         y_train_list.append(y)
 
-    X_train = np.vstack(X_train_list).astype(np.float64)
+    X_train = np.vstack(X_train_list).astype(np.float64) / 255.0
     y_train = np.concatenate(y_train_list)
     X_test, y_test = _unpickle(os.path.join(base, 'test_batch'))
-    X_test = X_test.astype(np.float64)
+    X_test = X_test.astype(np.float64) / 255.0
 
     # Per-channel Z-score: fit stats on train only, apply to both
-    ch_stats = []
-    for ch in range(3):
-        s, e = ch * 1024, (ch + 1) * 1024
-        mu  = X_train[:, s:e].mean()
-        sig = X_train[:, s:e].std()
-        ch_stats.append((mu, sig))
+    # ch_stats = []
+    # for ch in range(3):
+    #     s, e = ch * 1024, (ch + 1) * 1024
+    #     mu  = X_train[:, s:e].mean()
+    #     sig = X_train[:, s:e].std()
+    #     ch_stats.append((mu, sig))
 
-    X_train = _cifar_normalize(X_train, ch_stats)
-    X_test  = _cifar_normalize(X_test,  ch_stats)
+    # X_train = _cifar_normalize(X_train, ch_stats)
+    # X_test  = _cifar_normalize(X_test,  ch_stats)
 
     return X_train, y_train, X_test, y_test
 
@@ -146,15 +147,14 @@ def load_cifar10():
 # ---------------------------------------------------------------------------
 
 def load_rcv1():
-    """Load RCV1 using official train/test split, apply MaxAbsScaler.
+    """Load RCV1, MaxAbsScaler.
 
     Uses rcv1_train.binary and rcv1_test.binary (official split).
-    MaxAbsScaler preserves sparsity (no centering, no zero entry creation).
 
     Returns:
-        X_train : sparse CSR (20242, 47236) float64  scaled to [-1, 1]
+        X_train : sparse CSR (20242, 47236) float64  
         y_train : (20242,) float64  {-1, +1}
-        X_test  : sparse CSR (677399, 47236) float64  scaled to [-1, 1]
+        X_test  : sparse CSR (677399, 47236) float64 
         y_test  : (677399,) float64  {-1, +1}
     """
     train_path = os.path.join(DATA_DIR, 'rcv1', 'rcv1_train.binary', 'rcv1_train.binary')
@@ -179,18 +179,18 @@ def load_rcv1():
 # ---------------------------------------------------------------------------
 
 def load_covtype():
-    """Load Covtype, binarize labels, apply MaxAbsScaler, 50/50 split.
+    """Load Covtype, binarize labels, 50/50 split.
 
     Binarization: class 2 → +1.0, all others → -1.0 (as per paper).
 
     Returns:
-        X_train : sparse CSR (≈290000, 54) float64  scaled
+        X_train : sparse CSR (≈290000, 54) float64  
         y_train : (≈290000,) float64  {-1, +1}
         X_test  : sparse CSR (≈290000, 54)
         y_test  : (≈290000,) float64
     """
-    filepath = os.path.join(DATA_DIR, 'covtype', 'covtype.libsvm.binary',
-                            'covtype.libsvm.binary')
+    filepath = os.path.join(DATA_DIR, 'covtype', 'covtype.libsvm.binary.scale',
+                            'covtype.libsvm.binary.scale')
     X, y = load_svmlight_file(filepath)
 
     # Binarize: class 2 → +1, rest → -1
@@ -201,10 +201,10 @@ def load_covtype():
         X, y_bin, test_size=0.5, random_state=42
     )
 
-    # MaxAbsScaler preserves sparsity
-    scaler = MaxAbsScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test  = scaler.transform(X_test)
+    # # MaxAbsScaler preserves sparsity
+    # scaler = MaxAbsScaler()
+    # X_train = scaler.fit_transform(X_train)
+    # X_test  = scaler.transform(X_test)
 
     return X_train, y_train, X_test, y_test
 
