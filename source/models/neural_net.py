@@ -195,53 +195,22 @@ def full_grad(params, X, y, lam):
     return grad
 
 
-# ---------------------------------------------------------------------------
-# Stochastic Gradient (single sample)
-# ---------------------------------------------------------------------------
-
 def stoch_grad(params, xi, yi, lam):
-    """Compute stochastic gradient for a single sample.
+    """Compute stochastic gradient for a mini-batch.
+    
+    This returns the average gradient over the mini-batch, which matches
+    the scale of the full gradient (mu) used in SVRG.
 
     Args:
         params: dict with 'W1', 'b1', 'W2', 'b2'
-        xi: single sample (d,)
-        yi: label in {0, ..., K-1}
+        xi: mini-batch features (batch_size, d)
+        yi: mini-batch labels (batch_size,)
         lam: L2 regularization strength
 
     Returns:
         grad: dict with same keys as params
     """
-    K = params['W2'].shape[1]
-    n_hidden = params['W1'].shape[1]
-
-    # Forward pass (single sample)
-    z1 = xi @ params['W1'] + params['b1']     # (n_hidden,)
-    a1 = sigmoid(z1)                           # (n_hidden,)
-    z2 = a1 @ params['W2'] + params['b2']     # (K,)
-    probs = softmax(z2)                        # (K,)
-
-    # Output layer
-    one_hot = np.zeros(K)
-    one_hot[yi] = 1.0
-    dz2 = probs - one_hot                      # (K,)
-
-    dW2 = np.outer(a1, dz2) + lam * params['W2']   # (n_hidden, K)
-    db2 = dz2.copy()                                # (K,)
-
-    # Hidden layer
-    da1 = dz2 @ params['W2'].T                 # (n_hidden,)
-    dz1 = da1 * sigmoid_grad(z1)               # (n_hidden,)
-
-    dW1 = np.outer(xi, dz1) + lam * params['W1']   # (d, n_hidden)
-    db1 = dz1.copy()                                # (n_hidden,)
-
-    grad = {
-        'W1': dW1,
-        'b1': db1,
-        'W2': dW2,
-        'b2': db2,
-    }
-    return grad
+    return full_grad(params, xi, yi, lam)
 
 
 # ---------------------------------------------------------------------------
