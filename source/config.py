@@ -13,12 +13,12 @@ DATASET_CONFIGS = {
         'svrg_lr': 0.025,
         'svrg_m_factor': 2,           # m = 2 * n
         # SGD constant
-        'sgd_const_lr': 0.01,
+        'sgd_const_lr': [0.001, 0.0025, 0.005],
         # SGD best (decaying)
         'sgd_best_lr0': 0.1,
         'sgd_best_b': 1.0,            # Tune this parameter
         # SDCA
-        'sdca_lr': 1.0,
+        'sdca_lr': 0.025,
         # SAG
         'sag_lr': 0.01,
         # Warm-start
@@ -37,7 +37,7 @@ DATASET_CONFIGS = {
         'svrg_lr': 0.01,
         'svrg_m_factor': 2,
         # SGD constant
-        'sgd_const_lr': 0.01,
+        'sgd_const_lr': 0.001,
         # SGD best (decaying)
         'sgd_best_lr0': 0.1,
         'sgd_best_b': 1.0,

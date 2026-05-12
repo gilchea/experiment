@@ -3,7 +3,7 @@ __pycache__
 data
 .SKILLS
 SVRG-Pytorch
-__init__.py
+# __init__.py
 
 # không push các file .pkl và file output
 *.pkl
