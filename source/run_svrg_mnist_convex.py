@@ -25,7 +25,9 @@ VAR_N_SAMPLE = 500
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'results')
 RESULTS_FILE = os.path.join(RESULTS_DIR, 'svrg_mnist_convex.json')
-W_INIT_PATH = os.path.join(RESULTS_DIR, 'w_init_mnist.npy')
+# W_INIT_PATH = os.path.join(RESULTS_DIR, 'w_init_mnist.npy')
+# Trong run_svrg_mnist_convex.py, thay:
+W_INIT_PATH = os.path.join(RESULTS_DIR, 'w_init_svrg_mnist.npy')  # chỉ SVRG dùng
 OPTIMAL_PATH = os.path.join(RESULTS_DIR, 'optimal_loss.json')
 
 # --- Helpers ---

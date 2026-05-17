@@ -77,7 +77,7 @@ def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None):
 # SGD with Decaying Learning Rate  (SGD-best)
 # ---------------------------------------------------------------------------
 
-def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False):
+def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False):
     """Run 1 epoch of SGD with t-inverse decaying learning rate.
 
     Per PROCEDURE_SGD_.md, t-inverse schedule:
@@ -92,7 +92,7 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False):
         lam        : L2 regularization strength
         n          : dataset size (used for normalizing t in schedule)
         t_start    : total gradient steps before this epoch
-        b          : decay parameter
+        a          : decay parameter
         multiclass : whether multi-class
 
     Returns:
@@ -101,9 +101,10 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False):
     stoch_grad = _get_stoch_grad_fn(multiclass)
     indices = np.random.permutation(n)
     t = t_start
-
+    
     for i in indices:
-        lr_t = lr0 / (1.0 + b * t / n)    # t-inverse schedule per spec
+        # Exponential decay per paper
+        lr_t = lr0 * (a ** (t // n))
         g = stoch_grad(w, X[i], y[i], lam)
         w = w - lr_t * g
         t += 1
@@ -111,7 +112,7 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False):
     return w, t
 
 
-def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False, callback=None):
+def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False, callback=None):
     """Run multiple epochs of SGD with t-inverse decaying learning rate.
 
     Args:
@@ -121,7 +122,7 @@ def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False, callback=None):
         lr0        : initial learning rate eta_0
         lam        : regularization
         n_epochs   : number of epochs
-        b          : decay parameter
+        a          : decay parameter
         multiclass : multi-class flag
         callback   : optional function(w, epoch) called after each epoch
 
@@ -131,7 +132,7 @@ def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False, callback=None):
     n = len(y)
     t = 0
     for epoch in range(n_epochs):
-        w, t = sgd_epoch_decay(w, X, y, lr0, lam, n, t, b, multiclass)
+        w, t = sgd_epoch_decay(w, X, y, lr0, lam, n, t, a, multiclass)
         if callback:
             callback(w, epoch)
     return w

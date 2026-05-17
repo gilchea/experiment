@@ -25,7 +25,8 @@ VAR_N_SAMPLE = 500
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'results')
 RESULTS_FILE = os.path.join(RESULTS_DIR, 'sgd_best_mnist_convex.json')
-W_INIT_PATH = os.path.join(RESULTS_DIR, 'w_init_mnist.npy')
+# W_INIT_PATH = os.path.join(RESULTS_DIR, 'w_init_mnist.npy')
+W_RANDOM_PATH = os.path.join(RESULTS_DIR, 'w_random_init_mnist.npy')
 OPTIMAL_PATH = os.path.join(RESULTS_DIR, 'optimal_loss.json')
 
 # --- Helpers ---
@@ -65,10 +66,13 @@ def main():
     n, _ = X_train.shape
 
     # 3. Load w_init
-    if not os.path.exists(W_INIT_PATH):
-        print(f"ERROR: {W_INIT_PATH} not found. Run prepare_mnist_convex.py first.")
-        return
-    w_init = np.load(W_INIT_PATH)
+    # if not os.path.exists(W_INIT_PATH):
+    #     print(f"ERROR: {W_INIT_PATH} not found. Run prepare_mnist_convex.py first.")
+    #     return
+    # w_init = np.load(W_INIT_PATH)
+
+    w_init = np.load(W_RANDOM_PATH)  # zero init
+    ep = 0.0  # bắt đầu từ x=0
 
     # 4. Cấu trúc kết quả
     results = {
@@ -91,7 +95,7 @@ def main():
         w_sgd_best, t = sgd_epoch_decay(
             w_sgd_best, X_train, y_train,
             lr0=SGD_BEST_LR0, lam=LAM, n=n,
-            t_start=t, b=SGD_BEST_B, multiclass=MULTICLASS,
+            t_start=t, a=SGD_BEST_B, multiclass=MULTICLASS,
         )
         ep += 1.0
         tl = loss(w_sgd_best, X_train, y_train, LAM, MULTICLASS)

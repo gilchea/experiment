@@ -24,7 +24,8 @@ VAR_N_SAMPLE = 500
 
 RESULTS_DIR = os.path.join(os.path.dirname(__file__), '..', 'results')
 RESULTS_FILE = os.path.join(RESULTS_DIR, 'sgd_const_mnist_convex.json')
-W_INIT_PATH = os.path.join(RESULTS_DIR, 'w_init_mnist.npy')
+# W_INIT_PATH = os.path.join(RESULTS_DIR, 'w_init_mnist.npy')
+W_RANDOM_PATH = os.path.join(RESULTS_DIR, 'w_random_init_mnist.npy')
 OPTIMAL_PATH = os.path.join(RESULTS_DIR, 'optimal_loss.json')
 
 # --- Helpers ---
@@ -64,11 +65,17 @@ def main():
     n, _ = X_train.shape
 
     # 3. Load w_init
-    if not os.path.exists(W_INIT_PATH):
-        print(f"ERROR: {W_INIT_PATH} not found. Run prepare_mnist_convex.py first.")
-        return
-    w_init = np.load(W_INIT_PATH)
+    # if not os.path.exists(W_INIT_PATH):
+    #     print(f"ERROR: {W_INIT_PATH} not found. Run prepare_mnist_convex.py first.")
+    #     return
+    # w_init = np.load(W_INIT_PATH)
 
+    if not os.path.exists(W_RANDOM_PATH):
+        print(f"ERROR: {W_RANDOM_PATH} not found. Run prepare_mnist_convex.py first.")
+        return
+    w_init = np.load(W_RANDOM_PATH)
+    ep = 0.0  # bắt đầu từ x=0, KHÔNG cộng WARM_START_EPOCHS
+    
     # 4. Cấu trúc kết quả
     results = {}
 
