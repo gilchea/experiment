@@ -13,7 +13,7 @@ from utils.data_loader import load_dataset
 from models.logistic import loss_binary, full_grad_binary, loss_multiclass, full_grad_multiclass
 
 
-def gd_solve(X, y, lam, multiclass=False, max_iter=2000, lr=0.1, tol=1e-14, verbose=True):
+def gd_solve(X, y, lam, multiclass=False, max_iter=10000, tol=1e-14, verbose=True):
     """Run full-batch Gradient Descent to find P(w*).
 
     Args:
@@ -22,7 +22,6 @@ def gd_solve(X, y, lam, multiclass=False, max_iter=2000, lr=0.1, tol=1e-14, verb
         lam: L2 regularization strength
         multiclass: whether to use multi-class logistic regression
         max_iter: maximum GD iterations
-        lr: learning rate (constant)
         tol: stop when relative loss change < tol
         verbose: print progress
 
@@ -32,9 +31,8 @@ def gd_solve(X, y, lam, multiclass=False, max_iter=2000, lr=0.1, tol=1e-14, verb
         loss_history: list of loss values per iteration
     """
     n, d = X.shape
-    K = len(np.unique(y)) if multiclass else 1
-
     if multiclass:
+        K = len(np.unique(y))
         w = np.zeros((d, K))
         loss_fn = loss_multiclass
         grad_fn = full_grad_multiclass
@@ -44,36 +42,42 @@ def gd_solve(X, y, lam, multiclass=False, max_iter=2000, lr=0.1, tol=1e-14, verb
         grad_fn = full_grad_binary
 
     loss_history = []
+    grad_norm_history = []
+    eta = 1.0  # initial guess
+    c = 0.5   # Armijo parameter
 
     for t in range(max_iter):
         g = grad_fn(w, X, y, lam)
+        grad_norm = np.linalg.norm(g)
         current_loss = loss_fn(w, X, y, lam)
 
-        # Backtracking line search (để tìm learning rate tự động tối ưu)
-        step = lr
-        for _ in range(20):
-            w_new = w - step * g
+        # Armijo line search
+        eta_current = eta
+        for _ in range(30):
+            w_new = w - eta_current * g
             new_loss = loss_fn(w_new, X, y, lam)
-            # Điều kiện giảm Armijo
-            if new_loss <= current_loss - 0.5 * step * np.sum(g**2) or step < 1e-10:
+            # Armijo condition: f(w - ηg) ≤ f(w) - c·η·||g||²
+            if new_loss <= current_loss - c * eta_current * (grad_norm ** 2):
+                w = w_new
+                eta = eta_current * 1.01  # Slightly increase for next step
                 break
-            step *= 0.5
-            
-        w = w_new
+            eta_current *= 0.5
+        else:
+            # Line search failed completely
+            if verbose:
+                print(f"  Warning: line search failed at iter {t}")
+            break
 
         if t % 100 == 0 or t == max_iter - 1:
-            loss_history.append(new_loss)
-
+            loss_history.append(current_loss)
+            grad_norm_history.append(grad_norm)
             if verbose:
-                print(f"  iter {t:4d}: loss = {new_loss:.12f} (step = {step:.2e})")
+                print(f"  iter {t:6d}: loss = {current_loss:.12f}, |grad| = {grad_norm:.2e}, eta = {eta_current:.2e}")
 
-            # Check convergence
-            if len(loss_history) >= 2:
-                rel_change = abs(loss_history[-1] - loss_history[-2]) / max(1, abs(loss_history[-2]))
-                if rel_change < tol:
-                    if verbose:
-                        print(f"  Converged at iter {t}")
-                    break
+        if grad_norm < tol:
+            if verbose:
+                print(f"  Converged at iter {t}")
+            break
 
     P_star = loss_fn(w, X, y, lam)
     return w, P_star, loss_history
@@ -113,8 +117,7 @@ def compute_all_optimal():
         w_star, P_star, loss_hist = gd_solve(
             X_train, y_train, lam,
             multiclass=multiclass,
-            max_iter=2000,
-            lr=lr,
+            max_iter=10000,
             verbose=True,
         )
 
@@ -161,8 +164,7 @@ def compute_one(name, lam, multiclass):
     w_star, P_star, loss_hist = gd_solve(
         X_train, y_train, lam,
         multiclass=multiclass,
-        max_iter=2000,
-        lr=lr,
+        max_iter=10000,
         verbose=True,
     )
 
