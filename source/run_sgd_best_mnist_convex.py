@@ -84,7 +84,7 @@ def main():
     print(f"\nSGD-best  lr0={SGD_BEST_LR0}  b={SGD_BEST_B}  epochs={SGD_N_EPOCHS}")
 
     w_sgd_best = w_init.copy()
-    ep = float(WARM_START_EPOCHS)
+    # ep = float(WARM_START_EPOCHS)
     t = 0   # total gradient steps (for decay schedule)
 
     tl = loss(w_sgd_best, X_train, y_train, LAM, MULTICLASS)

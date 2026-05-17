@@ -75,7 +75,7 @@ def main():
         return
     w_init = np.load(W_RANDOM_PATH)
     ep = 0.0  # bắt đầu từ x=0, KHÔNG cộng WARM_START_EPOCHS
-    
+
     # 4. Cấu trúc kết quả
     results = {}
 
@@ -88,7 +88,7 @@ def main():
         print(f"\nSGD constant  lr={lr}  epochs={SGD_N_EPOCHS}")
 
         w_sgd = w_init.copy()
-        ep = float(WARM_START_EPOCHS)
+        # ep = float(WARM_START_EPOCHS)
 
         tl = loss(w_sgd, X_train, y_train, LAM, MULTICLASS)
         var = estimate_grad_variance(w_sgd, X_train, y_train, LAM, MULTICLASS)
