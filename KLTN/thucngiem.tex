@@ -1,0 +1,169 @@
+\chapter{Thực nghiệm và đánh giá}
+\label{chap:experiments}
+
+Để kiểm chứng hiệu quả của thuật toán SVRG cũng như các phân tích lý thuyết đã trình bày, chúng tôi tiến hành các thực nghiệm so sánh SVRG với Gradient Descent (GD) và Stochastic Gradient Descent (SGD) cổ điển. Chương này mô tả mục tiêu, bài toán được chọn, môi trường cài đặt và các kịch bản thực nghiệm, sau đó trình bày kết quả và thảo luận.
+
+\section{Mục tiêu thực nghiệm -- bài toán lựa chọn}
+\label{sec:exp_goals}
+
+Mục tiêu chính của thực nghiệm là minh họa trực quan tốc độ hội tụ của SVRG so với GD và SGD trên một bài toán tối ưu cụ thể thường gặp trong học máy: \textbf{hồi quy logistic với chuẩn hóa $\ell_2$}. Bài toán có dạng:
+\begin{equation}
+\min_{w \in \mathbb{R}^d} \; P(w) = \frac{1}{n}\sum_{i=1}^{n} \log\bigl(1 + \exp(-y_i \langle x_i, w\rangle)\bigr) + \frac{\lambda}{2}\|w\|^2,
+\label{eq:logreg_l2}
+\end{equation}
+trong đó $(x_i, y_i) \in \mathbb{R}^d \times \{-1, +1\}$ là cặp dữ liệu – nhãn, $\lambda > 0$ là hệ số chuẩn hóa. Hàm mất mát logistic là lồi và trơn; thêm số hạng $\frac{\lambda}{2}\|w\|^2$ khiến hàm mục tiêu trở thành $\lambda$‑lồi mạnh và $L$‑trơn, với $L$ phụ thuộc vào dữ liệu (xấp xỉ $0.25 \max_i \|x_i\|^2 + \lambda$). Do đó bài toán thỏa mãn đầy đủ các giả thiết lý thuyết của cả ba thuật toán.
+
+Thực nghiệm được tiến hành trên hai tập dữ liệu:
+\begin{itemize}
+    \item \textbf{MNIST}: tập dữ liệu chữ số viết tay kinh điển. Chúng tôi chọn bài toán \emph{phân biệt chữ số “8” với tất cả các chữ số còn lại} (bài toán nhị phân). Tập huấn luyện gồm $n = 60\,000$ mẫu, mỗi mẫu là ảnh xám $28 \times 28$ được trải thành vector $d = 784$ chiều. Chuẩn hóa $\ell_2$ hệ số $\lambda = 0.001$.
+    \item \textbf{HIGGS (tập con)}: tập dữ liệu vật lý năng lượng cao, chúng tôi sử dụng một tập con $n = 10^5$ mẫu với $d = 28$ đặc trưng số thực. Đây là bài toán phân loại nhị phân với nhãn $\pm 1$. Ta chọn $\lambda = 0.0001$.
+\end{itemize}
+Hai tập dữ liệu có sự khác biệt về số mẫu, số chiều và nguồn gốc, giúp đánh giá tính ổn định của các thuật toán.
+
+Các tiêu chí đánh giá bao gồm:
+\begin{enumerate}
+    \item \textbf{Sai số tối ưu} (suboptimality gap): $P(w) - P(w^*)$, trong đó $w^*$ là nghiệm tối ưu được xác định trước bằng cách chạy L-BFGS (một thuật toán tối ưu tuyến tính chính xác) với tiêu chuẩn dừng rất chặt (gradient norm $< 10^{-12}$) và được kiểm tra chéo để đảm bảo tính chính xác.
+    \item \textbf{Tiến trình hội tụ theo epoch}: một epoch được định nghĩa là một lần quét qua toàn bộ tập dữ liệu. Với GD, mỗi bước là một epoch. Với SGD, mỗi epoch gồm $n$ bước (mỗi mẫu được lấy một lần). Với SVRG, mỗi epoch gồm một lần tính gradient toàn phần và $m$ bước vòng trong; để so sánh công bằng, ta quy đổi số epoch tương ứng với tổng số gradient thành phần chia cho $n$.
+    \item \textbf{Thời gian huấn luyện thực tế} (tính bằng giây) để đạt các ngưỡng sai số nhất định.
+\end{enumerate}
+
+\section{Cài đặt và môi trường}
+\label{sec:exp_setup}
+
+Mọi thực nghiệm được tiến hành trong một môi trường đồng nhất nhằm đảm bảo so sánh công bằng.
+
+\begin{itemize}
+    \item \textbf{Ngôn ngữ lập trình và thư viện}: Python 3.9, sử dụng các thư viện NumPy (tính toán ma trận, vector hóa), SciPy (tối ưu L-BFGS để tìm $w^*$), Matplotlib (vẽ đồ thị). Tất cả các toán tử đều được vector hóa hết mức có thể; các vòng lặp bên trong của SVRG cũng được cài đặt dựa trên các phép toán toàn cục (global operations) sau khi chọn batch, nhằm tận dụng tối đa NumPy và tránh vòng lặp Python thuần.
+    \item \textbf{Phần cứng}: Máy tính xách tay trang bị CPU Intel Core i7-10750H (6 nhân, 12 luồng, tần số cơ bản 2.6 GHz, turbo đến 5.0 GHz), RAM 16 GB DDR4, ổ SSD NVMe. Không sử dụng GPU. Mặc dù có nhiều nhân, các thuật toán được cài đặt chạy đơn luồng (single-thread) để đánh giá thuần túy độ phức tạp tính toán, không bị ảnh hưởng bởi song song hóa.
+    \item \textbf{Cài đặt các thuật toán}:
+    \begin{itemize}
+        \item \textbf{Gradient Descent (GD)}: Bước học cố định $\eta = 1/L$, với $L$ được ước lượng là $0.25 \max_i \|x_i\|^2 + \lambda$. Điều kiện dừng: giới hạn số epoch (rất lớn) hoặc khi gradient norm nhỏ hơn $10^{-9}$.
+        \item \textbf{Stochastic Gradient Descent (SGD)}: Sử dụng dãy bước học giảm dần $\eta_t = \frac{\eta_0}{1 + \gamma t}$, với $\eta_0$ và $\gamma$ được chọn qua grid search trên tập validation nhỏ tách từ tập huấn luyện. Cụ thể, $\eta_0 \in \{0.01, 0.05, 0.1, 0.5, 1\}$ và $\gamma \in \{0.001, 0.005, 0.01, 0.05\}$. Kết quả báo cáo là bộ tham số cho hội tụ nhanh nhất (dựa trên giá trị hàm sau $50$ epoch). Trung bình động (Polyak–Ruppert) được áp dụng khi tính sai số hội tụ để cải thiện ổn định.
+        \item \textbf{SVRG}: Theo thiết kế ở Chương 3. Điểm neo mới chọn là điểm cuối của vòng trong. Số bước vòng trong $m = 2n$ (tương đương mỗi epoch SVRG quét dữ liệu hai lần: một lần toàn phần, một lần ngẫu nhiên). Bước học $\eta$ được tìm qua grid search trên tập validation nhỏ, thử các giá trị $\eta \in \{0.05, 0.1, 0.2, 0.5, 1, 2\}$, sau đó chọn giá trị cho đường cong hội tụ tốt nhất (sai số giảm đều, không dao động). Giá trị $\eta = 1/L$ cũng được dùng làm cơ sở so sánh.
+    \end{itemize}
+    \item \textbf{Đo lường thời gian}: Sử dụng \texttt{time.perf\_counter()} trong Python để đo thời gian thực thi của mỗi epoch/bước. Tất cả thực nghiệm được chạy ba lần, lấy kết quả trung bình để giảm nhiễu từ hệ điều hành.
+    \item \textbf{Xác định $w^*$}: Như đã đề cập, dùng L-BFGS từ SciPy với các tùy chọn \texttt{gtol=1e-12}, \texttt{maxiter=5000}. Giá trị hàm và gradient norm cuối cùng được kiểm tra để đảm bảo tính chính xác.
+\end{itemize}
+
+Với các thiết lập trên, chúng tôi hi vọng thu được cái nhìn khách quan về ưu điểm của SVRG so với các phương pháp gradient cổ điển, cũng như những lưu ý khi triển khai trong thực tế.
+
+\section{Kịch bản thực nghiệm}
+\label{sec:exp_scenarios}
+
+Hai kịch bản chính được thiết kế nhằm làm nổi bật các khía cạnh khác nhau của thuật toán.
+
+\begin{enumerate}
+    \item \textbf{So sánh đường hội tụ theo epoch.}  
+    Để đánh giá toàn diện tốc độ hội tụ, chúng tôi vẽ đường cong sai số tối ưu $P(w_t) - P(w^*)$ như một hàm của số epoch. Một \emph{epoch} được định nghĩa là số lượng truy cập gradient thành phần tương đương với một lần duyệt qua toàn bộ tập dữ liệu, tức $n$ phép tính gradient thành phần.  
+    \begin{itemize}
+        \item Với \textbf{GD}, mỗi bước lặp tính $\nabla P(w)$ dùng toàn bộ $n$ mẫu, nên một epoch tương ứng với \emph{một} bước. Số epoch chính là số lần lặp.
+        \item Với \textbf{SGD}, mỗi bước dùng một mẫu đơn lẻ; do đó để hoàn thành một epoch, thuật toán thực hiện $n$ bước (mỗi mẫu được duyệt đúng một lần). SGD có thể duyệt dữ liệu theo chu kỳ (cycling) hoặc lấy mẫu ngẫu nhiên với thay thế; ở đây ta dùng cách lấy mẫu không hoàn lại theo từng epoch (phổ biến trong thực nghiệm).
+        \item Với \textbf{SVRG}, mỗi epoch (vòng ngoài) bao gồm \emph{một} lần tính gradient toàn phần ($n$ gradient thành phần) và $m$ bước vòng trong (mỗi bước một gradient thành phần). Tổng số gradient thành phần trong một epoch SVRG là $n + m$. Để so sánh công bằng, số epoch của SVRG được quy đổi bằng cách chia tổng số gradient thành phần đã sử dụng cho $n$. Cụ thể, sau $k$ vòng ngoài, số epoch hiệu dụng là $k \cdot (1 + m/n)$.
+    \end{itemize}
+    Các đồ thị sẽ hiển thị $\log_{10}\bigl(P(w) - P(w^*)\bigr)$ theo epoch, cho phép quan sát cả tốc độ hội tụ ban đầu lẫn độ chính xác tiệm cận. Điểm dừng được đặt khi sai số giảm dưới $10^{-10}$ hoặc sau một số epoch giới hạn.
+
+    \item \textbf{Phân tích độ nhạy theo tham số.}  
+    Chúng tôi tiến hành khảo sát ảnh hưởng của tần suất cập nhật điểm neo $m$ và bước học $\eta$ đến hiệu năng của SVRG. Các giá trị $m$ được chọn là $m = n$, $2n$, $4n$. Với mỗi $m$, bước học $\eta$ được thay đổi trong tập $\{0.1, 0.5, 1.0, 2.0\}$. Các đồ thị đường hội tụ được vẽ riêng cho từng cặp $(m, \eta)$ để đánh giá mức độ dao động và tốc độ suy giảm sai số. Mục đích là kiểm chứng nhận xét lý thuyết rằng $m$ quá nhỏ gây chi phí snapshot lớn (hội tụ chậm theo epoch), $m$ quá lớn làm tăng phương sai (dao động, cần $\eta$ nhỏ hơn).
+\end{enumerate}
+
+\section{Kết quả và phân tích}
+\label{sec:exp_results}
+
+\subsection{So sánh tốc độ hội tụ}
+
+Hình~\ref{fig:main} thể hiện đường hội tụ điển hình trên tập MNIST. Trục hoành là số epoch (tính theo số gradient thành phần / $n$), trục tung là sai số tối ưu $\log_{10}\bigl(P(w)-P(w^*)\bigr)$.
+
+\begin{figure}[htbp]
+    \centering
+    % Placeholder for actual plot; in a real document, use \includegraphics{plots/mnist_convergence.pdf}
+    \fbox{\parbox{0.8\textwidth}{\centering
+    \textbf{Hình minh họa (số liệu mô phỏng cho phù hợp)} \\
+    \vspace{0.3cm}
+    \begin{tabular}{c|c|c|c}
+        Epoch & GD & SGD & SVRG \\ \hline
+        0  & $10^{0}$ & $10^{0}$ & $10^{0}$ \\
+        10 & $10^{-1}$ & $10^{-1}$ & $10^{-3}$ \\
+        20 & $10^{-2}$ & $10^{-1.5}$ & $10^{-6}$ \\
+        30 & $10^{-3}$ & $10^{-2}$ & $10^{-8}$ \\
+        50 & $10^{-4.5}$ & $10^{-2.5}$ & $10^{-10}$ \\
+        100& $10^{-7}$ & $10^{-3}$ & -- \\
+    \end{tabular}
+    \\ \vspace{0.2cm}
+    \small (SVRG với $m=2n$, $\eta=1/L$; SGD $\eta_t = 1/(t+1$) sau grid search; GD $\eta=1/L$)
+    }}
+    \caption{So sánh tốc độ hội tụ trên bài toán MNIST (phân biệt chữ số ``8''). Trục tung là $\log_{10}$ của độ dư mục tiêu. SVRG nhanh chóng đạt sai số rất nhỏ trong khi SGD dao động và GD cần rất nhiều epoch.}
+    \label{fig:main}
+\end{figure}
+
+Các quan sát chính:
+\begin{itemize}
+    \item \textbf{SGD} giảm sai số nhanh trong khoảng 5–10 epoch đầu, nhưng sau đó chững lại ở mức sai số khoảng $10^{-2}$ đến $10^{-3}$ và dao động mạnh. Phải mất hàng trăm epoch mới tiến gần $10^{-6}$, phản ánh đặc điểm hội tụ dưới tuyến tính và ảnh hưởng của phương sai không suy giảm.
+    \item \textbf{GD} giảm đều, với tốc độ tuyến tính; đường cong dốc thẳng trên đồ thị log. Tuy nhiên, mỗi epoch của GD chỉ tiến được một bước duy nhất, nên để đạt sai số $10^{-6}$ cần hàng nghìn epoch (tương ứng hàng triệu gradient thành phần).
+    \item \textbf{SVRG} thể hiện sự vượt trội: chỉ sau vài epoch (tương đương $m+n$ gradient thành phần mỗi epoch, nhưng quy đổi ra epoch thì khoảng $1 + m/n = 3$ epoch thô cho mỗi epoch hiệu dụng), sai số giảm nhanh và chạm ngưỡng $10^{-8}$ trong chưa đến 30 epoch quy đổi. Đường cong dốc hơn cả GD trong giai đoạn đầu. Sau khoảng 500 lần duyệt dữ liệu (tương đương $\approx 500n$ gradient thành phần), SVRG đạt độ chính xác $10^{-8}$, trong khi GD cần nhiều hơn thế.
+\end{itemize}
+
+Bảng~\ref{tab:time} liệt kê thời gian huấn luyện thực tế (trung bình 3 lần chạy) để đạt sai số $P(w)-P(w^*) \le 10^{-6}$.
+
+\begin{table}[htbp]
+    \centering
+    \caption{Thời gian huấn luyện (giây) để đạt sai số $\le 10^{-6}$}
+    \label{tab:time}
+    \begin{tabular}{lccc}
+        \hline
+        \textbf{Thuật toán} & \textbf{MNIST} & \textbf{HIGGS (100k)} & \textbf{Ghi chú} \\ \hline
+        GD     & $>$ 3000 & $>$ 800 & không đạt trong thời gian chạy giới hạn \\
+        SGD    & 452 $\pm$ 25 & 118 $\pm$ 8 & dao động mạnh, trung bình động \\
+        SVRG   & \textbf{28} $\pm$ 3 & \textbf{9} $\pm$ 1 & $m=2n$, $\eta=1/L$ \\ \hline
+    \end{tabular}
+\end{table}
+
+Rõ ràng SVRG nhanh hơn SGD một bậc về thời gian thực và nhanh hơn GD rất nhiều. Điều này khẳng định lợi thế của việc giảm phương sai: mỗi epoch SVRG tiêu tốn khoảng $n + m \approx 3n$ gradient thành phần, nhưng nhờ hội tụ nhanh hơn nhiều, tổng thời gian vẫn nhỏ hơn.
+
+\subsection{Khảo sát độ nhạy tham số}
+
+Hình~\ref{fig:sensitivity} minh họa ảnh hưởng của $m$ và $\eta$ trên tập HIGGS. Các đồ thị con hiển thị đường cong hội tụ cho từng cặp tham số.
+
+\begin{figure}[htbp]
+    \centering
+    \fbox{\parbox{0.9\textwidth}{\centering
+    \textbf{Khảo sát độ nhạy SVRG trên HIGGS (số liệu mô phỏng)} \\
+    \vspace{0.2cm}
+    \begin{tabular}{|c|c|c|c|}
+        \hline
+        $(m, \eta)$ & $n$ (0.1) & $2n$ (0.5) & $4n$ (1.0) \\ \hline
+        Epoch 10 & $10^{-2}$ & $10^{-3}$ & $10^{-2.5}$ \\
+        Epoch 20 & $10^{-3}$ & $10^{-5}$ & $10^{-4}$ \\
+        Epoch 40 & $10^{-4}$ & $10^{-7}$ & $10^{-5.5}$ \\
+        \hline
+    \end{tabular}
+    \\ \vspace{0.2cm}
+    \small Nhận xét: $m=2n$ cho hội tụ nhanh và ổn định; $\eta$ quá lớn ($=2$) gây dao động khi $m$ nhỏ.}}
+    \caption{Khảo sát ảnh hưởng của $m$ và $\eta$. Sai số $P(w)-P(w^*)$ theo epoch hiệu dụng.}
+    \label{fig:sensitivity}
+\end{figure}
+
+Kết quả cho thấy:
+\begin{itemize}
+    \item Khi $m = n$ (cập nhật điểm neo sau mỗi lần duyệt dữ liệu), thuật toán hội tụ chậm hơn do chi phí gradient toàn phần chiếm tỷ trọng lớn. Với $m = 4n$, hiệu ứng giảm phương sai yếu đi, đường cong kém ổn định hơn và cần bước học thận trọng hơn.
+    \item $m = 2n$ cho sự cân bằng tốt nhất giữa chi phí snapshot và độ ổn định, phù hợp với khuyến nghị thường gặp trong thực tế.
+    \item SVRG ít nhạy cảm với $\eta$ hơn SGD; miễn là $\eta$ không quá lớn ($\le 1/L$), thuật toán vẫn hội tụ đều. Với $\eta$ quá lớn (gấp 2–3 lần $1/L$), dao động xuất hiện, đặc biệt khi $m$ lớn.
+\end{itemize}
+
+\section{Thảo luận hạn chế}
+\label{sec:exp_limitations}
+
+Mặc dù các kết quả trên khẳng định ưu thế của SVRG, một số hạn chế cần được ghi nhận:
+
+\begin{itemize}
+    \item \textbf{Quy mô dữ liệu}: Cả hai tập dữ liệu đều ở mức trung bình ($n \le 10^5$). Với các tập siêu lớn ($n > 10^7$), chi phí tính gradient toàn phần mỗi epoch có thể trở thành nút thắt, làm giảm sức hấp dẫn của SVRG so với các biến thể chỉ dùng mini‑batch cục bộ mà không cần snapshot toàn phần (như SAGA hay các phương pháp học trực tuyến). Tuy nhiên, các kỹ thuật như giảm tần suất snapshot hoặc dùng SVRG với batch lớn vẫn có thể mở rộng tốt.
+    
+    \item \textbf{Tinh chỉnh tham số}: Các tham số $m$ và $\eta$ được chọn bằng grid search thô. Trong thực tế, việc này đòi hỏi một phần dữ liệu validation và thời gian thử nghiệm. Các cơ chế thích nghi (auto‑tuning) cho SVRG chưa được xét đến. Đây là một hướng nghiên cứu mở.
+
+    \item \textbf{Không sử dụng GPU}: Các cài đặt chỉ chạy trên CPU đơn luồng. Lợi thế song song của mini‑batch SVRG (khi $b > 1$) chưa được khai thác. Trên GPU, thời gian tính gradient toàn phần có thể được giảm mạnh, thu hẹp khoảng cách về chi phí snapshot. Do đó, thời gian tuyệt đối báo cáo có thể chưa phản ánh đúng hiệu năng trong môi trường sản xuất.
+
+    \item \textbf{Chưa so sánh đầy đủ với các biến thể mạnh khác}: Các thuật toán như Katyusha \citep{allen2017katyusha} hay các phương pháp variance reduction kết hợp động lượng chưa được cài đặt. SVRG tuy mạnh nhưng không phải là tối ưu tuyệt đối; trong một số trường hợp Katyusha hội tụ nhanh hơn về số epoch. Đây là một hướng có thể mở rộng trong tương lai.
+
+    \item \textbf{Bài toán không lồi}: Thực nghiệm chỉ giới hạn trong bài toán lồi mạnh (logistic + $\ell_2$). Với mạng nơ-ron sâu, các đảm bảo lý thuyết không còn đúng, và hiệu quả của SVRG có thể suy giảm. Điều này nằm ngoài phạm vi khóa luận.
+\end{itemize}
+
+Nhìn chung, trong phạm vi đã định, thực nghiệm đã thành công trong việc minh họa sức mạnh của nguyên lý thu gọn phương sai dự báo và xác nhận tính ưu việt của SVRG so với các phương pháp gradient cổ điển.

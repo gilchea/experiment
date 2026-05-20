@@ -1,0 +1,373 @@
+\documentclass[12pt,a4paper]{report}
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{amsthm}
+\usepackage{algorithm,algorithmic}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage[sort&compress]{natbib}
+\usepackage{bm}
+\usepackage[margin=2.5cm]{geometry}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Định nghĩa}[chapter]
+\newtheorem{theorem}{Định lý}[chapter]
+\newtheorem{lemma}{Bổ đề}[chapter]
+\newtheorem{remark}{Nhận xét}[chapter]
+\newtheorem{corollary}{Hệ quả}[chapter]
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\E}{\mathbb{E}}
+
+\begin{document}
+
+\title{\bf Tìm hiểu cơ sở phương pháp luận của các giải thuật trượt Gradient ngẫu nhiên tăng cường sử dụng phép thu gọn phương sai dự báo và bước đầu áp dụng trong một số trường hợp cụ thể}
+\author{Nguyễn Văn A \\ \small Khoa Công nghệ Thông tin, Trường Đại học XYZ}
+\date{\today}
+\maketitle
+
+\tableofcontents
+\listoffigures
+\listofalgorithms
+
+\chapter*{Phần mở đầu}
+\addcontentsline{toc}{chapter}{Phần mở đầu}
+
+\section*{Lý do chọn đề tài}
+Trong thập kỷ qua, học máy (machine learning) đã trở thành một trụ cột của trí tuệ nhân tạo, dựa trên nền tảng của các bài toán tối ưu hóa quy mô lớn. Một lớp bài toán điển hình là tối thiểu hóa rủi ro thực nghiệm (empirical risk minimization – ERM), có dạng
+\begin{equation}
+\min_{w \in \mathbb{R}^d} \Big\{ P(w) = \frac{1}{n}\sum_{i=1}^{n} f_i(w) + R(w) \Big\},
+\end{equation}
+trong đó $f_i$ thường là hàm mất mát (loss function) của mẫu dữ liệu thứ $i$, $R(w)$ là thành phần phạt (regularizer) và $n$ có thể lên đến hàng triệu. Các phương pháp gradient toàn phần (gradient descent – GD) đòi hỏi tính $\nabla P(w)$ trên toàn bộ tập huấn luyện, dẫn đến chi phí tính toán quá lớn. Để khắc phục, thuật toán trượt gradient ngẫu nhiên (stochastic gradient descent – SGD) sử dụng một ước lượng gradient từ một hoặc một vài mẫu, giúp giảm chi phí mỗi bước lặp. Tuy nhiên, ước lượng gradient trong SGD có phương sai cao, khiến thuật toán hội tụ chậm (hội tụ dưới tuyến tính – sublinear convergence) ngay cả với bài toán lồi mạnh (strongly convex).
+
+Nhằm dung hòa giữa chi phí rẻ của SGD và hội tụ tuyến tính của GD, các kỹ thuật thu gọn phương sai (variance reduction) đã ra đời. Trong số đó, công trình của \citet{johnson2013accelerating} với thuật toán SVRG (Stochastic Variance Reduced Gradient) là một đột phá: chỉ cần định kỳ tính gradient toàn phần tại một điểm neo (snapshot), SVRG có thể giảm phương sai về 0 khi tiến đến nghiệm và đạt tốc độ hội tụ tuyến tính với chi phí gradient tổng thấp hơn hẳn GD. Chủ đề này vừa có ý nghĩa lý thuyết sâu sắc, vừa mang tính thực tiễn cao cho các ứng dụng học máy ngày nay. Chính vì vậy, tôi chọn đề tài “Tìm hiểu cơ sở phương pháp luận của các giải thuật trượt Gradient ngẫu nhiên tăng cường sử dụng phép thu gọn phương sai dự báo và bước đầu áp dụng trong một số trường hợp cụ thể” làm khóa luận tốt nghiệp.
+
+\section*{Mục tiêu nghiên cứu}
+Khóa luận hướng tới ba mục tiêu chính:
+\begin{enumerate}
+    \item Trình bày một cách hệ thống cơ sở lý thuyết của các phương pháp giảm phương sai, đặc biệt là thuật toán SVRG và các biến thể của nó.
+    \item Phân tích hội tụ của SVRG cho bài toán lồi mạnh dưới góc nhìn xác suất, từ đó so sánh độ phức tạp với GD và SGD cổ điển.
+    \item Cài đặt thử nghiệm SVRG trên bài toán hồi quy logistic (logistic regression) và phân loại ảnh MNIST, đánh giá hiệu quả thông qua số lần duyệt dữ liệu và thời gian huấn luyện.
+\end{enumerate}
+
+\section*{Đối tượng và phạm vi nghiên cứu}
+Đối tượng nghiên cứu chính là các thuật toán SGD cải tiến sử dụng nguyên lý thu gọn phương sai dự báo, trọng tâm là SVRG. Phạm vi lý thuyết giới hạn trong lớp bài toán lồi mạnh có cấu trúc tổng hữu hạn (finite-sum) không có ràng buộc, với hàm thành phần $f_i$ khả vi và gradient Lipschitz liên tục; một số mở rộng sang bài toán lồi không mạnh hoặc có thành phần phạt không trơn được thảo luận sơ lược. Thực nghiệm được tiến hành trên tập dữ liệu cỡ vừa (MNIST, tập con của HIGGS) trong môi trường Python.
+
+\section*{Phương pháp nghiên cứu}
+Phương pháp nghiên cứu chủ yếu là phân tích lý thuyết và thực nghiệm kiểm chứng. Về lý thuyết, luận văn kế thừa các kết quả từ các bài báo gốc, hệ thống hóa các bổ đề và định lý, đồng thời bổ sung những chứng minh chi tiết. Về thực nghiệm, thuật toán được cài đặt trên Python (NumPy, Scikit-learn một phần), các đồ thị hội tụ được vẽ bằng Matplotlib. So sánh được thực hiện dựa trên giá trị hàm mục tiêu theo số lần duyệt dữ liệu (epoch) và thời gian chạy.
+
+\section*{Bố cục khóa luận}
+Ngoài phần mở đầu, tài liệu tham khảo và phụ lục, khóa luận gồm năm chương:
+\begin{itemize}
+    \item Chương 1: Giới thiệu chung – đặt bài toán, khảo sát GD/SGD, nhu cầu giảm phương sai và lược sử SAG, SAGA, SVRG.
+    \item Chương 2: Kiến thức chuẩn bị – các khái niệm giải tích lồi, hội tụ, phân tích GD và SGD cổ điển, phát biểu bài toán ERM.
+    \item Chương 3: Phương pháp tăng tốc SGD bằng thu gọn phương sai dự báo – chi tiết thuật toán SVRG, phân tích hội tụ, các biến thể và so sánh.
+    \item Chương 4: Thực nghiệm và đánh giá – mô tả cài đặt, kịch bản thí nghiệm, kết quả và phân tích.
+    \item Chương 5: Kết luận và hướng phát triển.
+\end{itemize}
+
+\chapter{Giới thiệu chung}
+
+\section{Bài toán tối ưu trong học máy quy mô lớn}
+Học máy hiện đại thường được đặt ra như bài toán tối thiểu hóa kỳ vọng:
+\begin{equation}
+\min_{w\in\mathbb{R}^d} \; F(w) = \E_{\xi\sim\mathcal{D}}[\ell(w;\xi)],
+\end{equation}
+trong đó $\xi$ là mẫu dữ liệu lấy từ phân phối $\mathcal{D}$ và $\ell(w;\xi)$ là hàm mất mát. Khi không biết $\mathcal{D}$, người ta thay bằng rủi ro thực nghiệm (ERM) trên tập huấn luyện $\{\xi_i\}_{i=1}^{n}$:
+\begin{equation}
+\min_{w} \; P(w) = \frac{1}{n}\sum_{i=1}^{n} f_i(w),
+\label{eq:erm}
+\end{equation}
+với $f_i(w) = \ell(w;\xi_i)$ (có thể cộng thêm $R(w)$). $n$ thường rất lớn nên việc tính đạo hàm toàn phần $\nabla P(w)$ có chi phí $O(n d)$ là không khả thi cho các vòng lặp tối ưu.
+
+\section{Gradient Descent truyền thống và hạn chế}
+Phương pháp gradient descent (GD) cập nhật:
+\begin{equation}
+w_{t+1} = w_t - \eta \nabla P(w_t),
+\end{equation}
+với tốc độ học $\eta > 0$. Đối với bài toán lồi mạnh và trơn (smooth), GD hội tụ tuyến tính về nghiệm $w^*$: $P(w_t) - P(w^*) \le (1 - \mu/L)^t (P(w_0)-P(w^*))$, nhưng mỗi bước cần $O(n d)$ phép tính. Khi $n$ cỡ hàng triệu, chi phí này khiến GD trở nên không thực tế.
+
+
+\section{Stochastic Gradient Descent -- ưu, nhược điểm}
+SGD thay thế gradient toàn phần bằng gradient của một mẫu $i_t$ chọn ngẫu nhiên:
+\begin{equation}
+w_{t+1} = w_t - \eta_t \nabla f_{i_t}(w_t).
+\end{equation}
+$\E[\nabla f_{i_t}(w_t)] = \nabla P(w_t)$ nên ước lượng không chệch (unbiased). Nhờ đó mỗi bước chỉ tốn $O(d)$. Tuy nhiên, phương sai của gradient ngẫu nhiên $V = \E\|\nabla f_{i_t}(w_t) - \nabla P(w_t)\|^2$ khiến SGD chỉ đạt hội tụ dưới tuyến tính $O(1/t)$ với bước học giảm dần, ngay cả khi $P$ lồi mạnh. Điều này dẫn đến sự đánh đổi giữa tốc độ và độ chính xác.
+
+\section{Nhu cầu cải thiện SGD: hướng tiếp cận thu gọn phương sai}
+Để đạt hội tụ tuyến tính mà vẫn giữ chi phí mỗi bước thấp, các nhà nghiên cứu đề xuất kỹ thuật \textbf{thu gọn phương sai} (variance reduction). Ý tưởng chung là kết hợp gradient ngẫu nhiên hiện tại với một ước lượng gradient toàn phần đã lưu từ trước để triệt tiêu dần nhiễu. Nhờ đó, phương sai tiệm cận về 0 khi $w_t \to w^*$, cho phép dùng bước học cố định và đạt hội tụ tuyến tính.
+
+\section{Sơ lược lịch sử phát triển}
+\begin{itemize}
+    \item \textbf{SAG} (Stochastic Average Gradient) \citep{leroux2012stochastic,schmidt2017minimizing} lưu gradient gần nhất của mọi $f_i$, duy trì trung bình động, lần đầu đạt hội tụ tuyến tính cho bài toán tổng hữu hạn nhưng tốn bộ nhớ $O(n d)$.
+    \item \textbf{SAGA} \citep{defazio2014saga} cải tiến SAG bằng cách dùng bảng gradient quá khứ và cho phép hỗ trợ thành phần không trơn.
+    \item \textbf{SVRG} \citep{johnson2013accelerating} giảm yêu cầu bộ nhớ xuống $O(d)$ bằng cấu trúc vòng lặp lồng: định kỳ tính gradient toàn phần tại điểm neo và dùng nó để hiệu chỉnh gradient ngẫu nhiên trong vòng lặp trong.
+    \item Các biến thể sau đó: Katyusha \citep{allen2017katyusha} kết hợp đà (momentum) và tăng tốc Nesterov, các phương pháp variance reduction thích nghi, v.v.
+\end{itemize}
+
+\section{Đóng góp dự kiến của khóa luận}
+Khóa luận góp phần hệ thống hóa lý thuyết SVRG, cung cấp chứng minh chi tiết và minh họa bằng thực nghiệm trên dữ liệu thực. So sánh với SGD và GD được thực hiện rõ ràng, giúp người đọc hiểu được ưu thế và điều kiện áp dụng của thuật toán.
+
+\chapter{Kiến thức chuẩn bị}
+
+\section{Cơ sở giải tích lồi}
+\subsection{Tập lồi, hàm lồi}
+\begin{definition}
+Một tập $\mathcal{C} \subseteq \mathbb{R}^d$ là \textbf{tập lồi} (convex set) nếu với mọi $x,y\in \mathcal{C}$ và $\lambda\in[0,1]$, $\lambda x + (1-\lambda)y \in \mathcal{C}$.
+\end{definition}
+\begin{definition}
+Hàm $f:\mathbb{R}^d \to \mathbb{R}$ là \textbf{hàm lồi} (convex function) nếu miền xác định là tập lồi và với mọi $x,y$, $\lambda\in[0,1]$:
+\begin{equation}
+f(\lambda x + (1-\lambda)y) \le \lambda f(x) + (1-\lambda) f(y).
+\end{equation}
+Hàm $f$ được gọi là \textbf{lồi mạnh} (strongly convex) với tham số $\mu > 0$ nếu $f(x) - \frac{\mu}{2}\|x\|^2$ là lồi. Tương đương, với mọi $x,y$:
+\begin{equation}
+f(y) \ge f(x) + \langle \nabla f(x), y-x \rangle + \frac{\mu}{2}\|y-x\|^2.
+\end{equation}
+\end{definition}
+
+\subsection{Điều kiện tối ưu, gradient và dưới gradient}
+Với hàm lồi khả vi $f$, $x^*$ là điểm cực tiểu toàn cục khi và chỉ khi $\nabla f(x^*) = 0$. Với hàm lồi không khả vi, ta dùng tập dưới gradient $\partial f(x) = \{g \mid f(y) \ge f(x) + \langle g, y-x\rangle \;\forall y\}$ và điều kiện tối ưu là $0\in\partial f(x^*)$.
+
+\section{Các khái niệm về độ trơn và tốc độ hội tụ}
+\subsection{Hàm khả vi liên tục Lipschitz (L‑smooth)}
+\begin{definition}
+Hàm $f$ được gọi là \textbf{L‑smooth} (hay gradient Lipschitz liên tục) nếu tồn tại hằng số $L>0$ sao cho với mọi $x,y$:
+\begin{equation}
+\|\nabla f(x) - \nabla f(y)\| \le L \|x-y\|.
+\end{equation}
+Hệ quả: $f(y) \le f(x) + \langle \nabla f(x), y-x \rangle + \frac{L}{2}\|y-x\|^2$.
+\end{definition}
+Bài toán cơ bản trong luận văn xét $P(w)$ lồi mạnh với hệ số $\mu$ và mỗi $f_i$ là L-smooth, dẫn đến $P$ cũng L-smooth.
+
+\subsection{Tốc độ hội tụ}
+Ký hiệu $\Delta_t = P(w_t) - P(w^*)$. Ta nói thuật toán hội tụ \textbf{tuyến tính} (linear convergence) nếu tồn tại $\rho \in (0,1)$ sao cho $\Delta_{t+1} \le \rho \Delta_t$; hội tụ \textbf{dưới tuyến tính} (sublinear) nếu $\Delta_t = O(1/t^\alpha)$ với $\alpha>0$.
+
+\section{Phương pháp Gradient Descent}
+Cập nhật GD: $w_{t+1} = w_t - \eta \nabla P(w_t)$. Với $P$ lồi mạnh, $\mu$-strongly convex và L-smooth, chọn $\eta = 1/L$ đảm bảo
+\begin{equation}
+\|w_{t+1} - w^*\|^2 \le \left(1 - \frac{\mu}{L}\right) \|w_t - w^*\|^2,
+\end{equation}
+dẫn đến hội tụ tuyến tính. Số bước lặp để đạt sai số $\epsilon$ là $O(\kappa \log(1/\epsilon))$ với $\kappa = L/\mu$ là số điều kiện (condition number). Tuy nhiên mỗi bước cần $O(n)$ gradient thành phần.
+
+\section{Stochastic Gradient Descent cổ điển}
+Xét SGD chọn mẫu $i_t$ đều:
+\begin{equation}
+w_{t+1} = w_t - \eta_t \nabla f_{i_t}(w_t).
+\end{equation}
+Với bước giảm $\eta_t = \frac{c}{t}$, SGD đạt $\E[P(\bar{w}_T) - P(w^*)] \le \frac{G}{T}$ (dưới tuyến tính), trong đó $\bar{w}_T$ là trung bình động. Nguyên nhân là phương sai $\sigma^2 = \E\|\nabla f_i(w_t) - \nabla P(w_t)\|^2$ không giảm về 0 khi $w_t \to w^*$, trừ khi mỗi $f_i$ có nghiệm chung (interpolation).
+
+\section{Bài toán tối thiểu hóa tổng hữu hạn}
+Luận văn tập trung vào bài toán ERM \eqref{eq:erm}. Tổng quát hơn ta có thể thêm thành phần phạt $R(w)$:
+\begin{equation}
+\min_{w\in\mathbb{R}^d} \left\{ P(w) = \frac{1}{n}\sum_{i=1}^{n} f_i(w) + R(w) \right\},
+\end{equation}
+trong đó $R$ có thể là hàm lồi không trơn (như $\ell_1$, $\ell_2$). Khi $R$ là hàm lồi mạnh hoặc các $f_i$ lồi mạnh, $P$ lồi mạnh.
+
+\section{Các thuật toán tiên phong giảm phương sai}
+\subsection{SAG (Stochastic Average Gradient)}
+SAG \citep{leroux2012stochastic} lưu vector gradient $y_i$ cho mỗi $f_i$, khởi tạo $y_i = \nabla f_i(w_0)$. Ở mỗi bước, chọn $i_t$, cập nhật:
+\begin{equation}
+w_{t+1} = w_t - \frac{\eta}{n} \sum_{i=1}^{n} y_i,
+\end{equation}
+sau đó cập nhật $y_{i_t} \leftarrow \nabla f_{i_t}(w_t)$, các $y_j$ khác giữ nguyên. Hội tụ tuyến tính cho bài toán lồi mạnh, nhưng cần bộ nhớ $O(nd)$.
+
+\subsection{SAGA}
+SAGA \citep{defazio2014saga} cũng lưu bảng gradient $\alpha_i$, nhưng cập nhật:
+\begin{equation}
+v_t = \nabla f_{i_t}(w_t) - \alpha_{i_t} + \frac{1}{n}\sum_{j=1}^{n}\alpha_j,
+\end{equation}
+rồi $w_{t+1}=w_t - \eta v_t$ và $\alpha_{i_t} = \nabla f_{i_t}(w_t)$. Đây là phiên bản không chệch và hỗ trợ thành phần không trơn thông qua proximal operator.
+
+\chapter{Phương pháp tăng tốc SGD bằng thu gọn phương sai dự báo}
+
+\section{Động lực và ý tưởng chính}
+Trong SGD, gradient ngẫu nhiên $\nabla f_i(w_t)$ có phương sai cao. Thuật toán SVRG giảm phương sai bằng cách dùng một \textbf{gradient tham chiếu} $\nabla P(\tilde{w})$ được tính toàn phần định kỳ tại điểm neo $\tilde{w}$. Thay vì dùng $\nabla f_i(w_t)$, SVRG hiệu chỉnh bằng thành phần $\nabla f_i(w_t) - \nabla f_i(\tilde{w}) + \nabla P(\tilde{w})$. Đại lượng này vẫn là ước lượng không chệch của $\nabla P(w_t)$ nhưng có phương sai nhỏ hơn khi $\tilde{w}$ gần $w_t$, và tiến về 0 khi $w_t,\tilde{w}\to w^*$.
+
+\section{Thuật toán SVRG (Johnson \& Zhang, 2013)}
+\subsection{Cấu trúc vòng lặp lồng}
+SVRG tổ chức thành các epoch. Ở epoch thứ $s$, ta tính gradient toàn phần tại điểm neo $w^s$:
+\begin{equation}
+\tilde{\mu}_s = \nabla P(w^s) = \frac{1}{n}\sum_{i=1}^{n} \nabla f_i(w^s).
+\end{equation}
+Sau đó thực hiện $m$ bước lặp trong (inner iteration) khởi đầu $w_0^{s} = w^s$, với mỗi $t=0,\dots,m-1$:
+\begin{itemize}
+    \item Chọn ngẫu nhiên $i_t \in \{1,\dots,n\}$.
+    \item Tính gradient hiệu chỉnh:
+    \begin{equation}
+    v_t^s = \nabla f_{i_t}(w_t^s) - \nabla f_{i_t}(w^s) + \tilde{\mu}_s.
+    \label{eq:svrg_v}
+    \end{equation}
+    \item Cập nhật: $w_{t+1}^s = w_t^s - \eta\, v_t^s$.
+\end{itemize}
+Sau $m$ bước, điểm neo mới cho epoch tiếp theo có thể chọn là $w_{m}^s$ hoặc lấy trung bình.
+
+\subsection{Giả mã}
+\begin{algorithm}[htb]
+\caption{SVRG cơ bản}
+\label{alg:svrg}
+\begin{algorithmic}[1]
+\STATE \textbf{Input:} Bước nhảy $\eta$, số epoch $S$, số bước trong $m$, khởi tạo $\tilde{w}_0$.
+\FOR{$s = 0,1,\dots,S-1$}
+    \STATE Tính gradient toàn phần $\tilde{\mu}_s = \frac{1}{n}\sum_{i=1}^{n} \nabla f_i(\tilde{w}_s)$.
+    \STATE Gán $w_0 = \tilde{w}_s$.
+    \FOR{$t = 0$ \TO $m-1$}
+        \STATE Chọn ngẫu nhiên $i_t \sim \text{Uniform}(1,\dots,n)$.
+        \STATE $v_t = \nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w}_s) + \tilde{\mu}_s$.
+        \STATE $w_{t+1} = w_t - \eta\, v_t$.
+    \ENDFOR
+    \STATE Cập nhật điểm neo $\tilde{w}_{s+1} = w_m$ (hoặc trung bình của các $w_t$).
+\ENDFOR
+\STATE \textbf{Output:} $\tilde{w}_S$ (hoặc nghiệm lấy trung bình).
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Thảo luận trực quan}
+Ở mỗi bước trong, $v_t$ có kỳ vọng $\E[v_t] = \nabla P(w_t)$. Phương sai $\E\|v_t - \nabla P(w_t)\|^2$ bị chặn bởi $L\|w_t - \tilde{w}_s\|^2$, nghĩa là khi vòng lặp tiến đến gần $\tilde{w}_s$, phương sai giảm dần. Điều này trái ngược với SGD cổ điển, nơi phương sai không giảm.
+
+\section{Phân tích hội tụ cho hàm lồi mạnh}
+Giả thiết: mỗi $f_i$ lồi, L-smooth, $P$ lồi mạnh với hệ số $\mu$. Ký hiệu $w^*$ là nghiệm duy nhất.
+
+\begin{lemma}[Phương sai bị chặn]
+Với $v_t$ định nghĩa như \eqref{eq:svrg_v}, ta có:
+\begin{equation}
+\E_{i_t} \|v_t - \nabla P(w_t)\|^2 \le 2L\big[P(w_t) - P(w^*)\big] + 2L\big[P(\tilde{w}) - P(w^*)\big] - 2\mu\|\nabla P(w_t)\|^2.
+\label{lem:varbound}
+\end{equation}
+Chú ý rằng khi $w_t,\tilde{w} \to w^*$, cận trên tiến về 0.
+\end{lemma}
+
+\begin{theorem}[Hội tụ tuyến tính của SVRG]
+Chọn $\eta = \frac{1}{10 L \kappa}$ (ví dụ) và $m$ đủ lớn ($m = \Theta(\kappa)$). Sau mỗi epoch, kỳ vọng sai số giảm theo hệ số $\rho < 1$:
+\begin{equation}
+\E[P(\tilde{w}_{s+1}) - P(w^*)] \le \alpha^m \, \E[P(\tilde{w}_s) - P(w^*)],
+\end{equation}
+với $\alpha$ phụ thuộc vào $\eta, L, \mu$. Cụ thể, với $m = O(\kappa)$, ta có $\E[P(\tilde{w}_S) - P(w^*)] \le \rho^S (P(w_0)-P(w^*))$. Độ phức tạp gradient toàn phần để đạt $\epsilon$ là $O\big((n + \kappa)\log(1/\epsilon)\big)$, so với $O(n\kappa\log(1/\epsilon))$ của GD.
+\end{theorem}
+
+\section{Các biến thể quan trọng}
+\subsection{SVRG với mini‑batch}
+Thay vì một mẫu, ta dùng một batch $B_t$ kích thước $b$:
+\begin{equation}
+v_t = \frac{1}{b}\sum_{i\in B_t} \big(\nabla f_i(w_t) - \nabla f_i(\tilde{w})\big) + \nabla P(\tilde{w}).
+\end{equation}
+Phương sai giảm tỷ lệ $1/b$, giúp hội tụ nhanh hơn khi thực thi song song.
+
+\subsection{Proximal SVRG}
+Khi $R(w)$ không trơn (ví dụ $\ell_1$-regularization), ta dùng bước cập nhật proximal:
+\begin{equation}
+w_{t+1} = \operatorname{prox}_{\eta R}\big(w_t - \eta v_t\big).
+\end{equation}
+Thuật toán vẫn đảm bảo hội tụ tuyến tính cho composite objective.
+
+\subsection{SVRG cho bài toán lồi tổng quát (không mạnh)}
+Với $P$ chỉ lồi (không mạnh), ta áp dụng kỹ thuật \emph{restart} định kỳ hoặc thêm số hạng chuẩn hóa nhỏ. Tốc độ hội tụ khi đó là $O(1/T)$ với $T$ tổng số phép tính gradient toàn phần, tương tự GD.
+
+\section{So sánh với SAG, SAGA và các phương pháp khác}
+Bảng \ref{tab:compare} tổng hợp một số đặc trưng chính.
+\begin{table}[htbp]
+\centering
+\caption{So sánh các thuật toán giảm phương sai cho bài toán lồi mạnh}
+\label{tab:compare}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Thuật toán} & \textbf{Bộ nhớ} & \textbf{Tần suất gradient toàn phần} & \textbf{Độ phức tạp (số gradient)} \\ \hline
+GD        & $O(d)$      & mỗi bước & $O(n\kappa\log(1/\epsilon))$ \\
+SGD       & $O(d)$      & không     & $O(1/\epsilon)$ (dưới tuyến tính) \\
+SAG       & $O(nd)$     & không (dùng trung bình) & $O((n+\kappa)\log(1/\epsilon))$ \\
+SAGA      & $O(nd)$     & không     & $O((n+\kappa)\log(1/\epsilon))$ \\
+SVRG      & $O(d)$      & mỗi epoch ($m$ bước) & $O((n+\kappa)\log(1/\epsilon))$ \\ \hline
+\end{tabular}
+\end{table}
+
+Ưu điểm của SVRG là bộ nhớ chỉ $O(d)$, phù hợp bài toán rất nhiều chiều, trong khi SAG/SAGA cần $O(nd)$. Tuy nhiên SVRG đòi hỏi chọn tham số $m$ và $\eta$ phù hợp.
+
+\section{Thảo luận về lựa chọn siêu tham số}
+\begin{itemize}
+    \item \textbf{Tần suất $m$}: $m$ quá nhỏ khiến chi phí gradient toàn phần cao; $m$ quá lớn làm giảm hiệu ứng giảm phương sai vì điểm neo cũ. Lý thuyết khuyến nghị $m = O(\kappa)$; thực tế thường dùng $m = 2n$ (tương đương 1 epoch dữ liệu) cho kết quả tốt.
+    \item \textbf{Bước nhảy $\eta$}: Trong lý thuyết $\eta = 1/(10 L \kappa)$. Thực nghiệm cho thấy giá trị $\eta = 1/L$ thậm chí còn hoạt động với $m$ đủ lớn. Có thể sử dụng tìm kiếm lưới (grid search) nhỏ.
+\end{itemize}
+
+\chapter{Thực nghiệm và đánh giá}
+
+\section{Mục tiêu thực nghiệm -- bài toán lựa chọn}
+Thực nghiệm nhằm kiểm chứng tốc độ hội tụ của SVRG so với GD và SGD trên bài toán hồi quy logistic (logistic regression) với chuẩn hóa $\ell_2$:
+\begin{equation}
+P(w) = \frac{1}{n}\sum_{i=1}^{n} \log\big(1 + \exp(-y_i \langle x_i, w\rangle)\big) + \frac{\lambda}{2}\|w\|^2.
+\end{equation}
+Tập dữ liệu: MNIST (phân biệt chữ số “8” với các chữ số khác, $n=60000$, $d=784$) và một tập con của HIGGS ($n=10^5$, $d=28$). Tiêu chí: giá trị $P(w_t)-P(w^*)$ theo số lần duyệt dữ liệu (epoch) và thời gian.
+
+\section{Cài đặt và môi trường}
+\begin{itemize}
+    \item Ngôn ngữ: Python 3.9, thư viện NumPy, Scipy, Matplotlib. Các toán tử được vector hóa để so sánh công bằng.
+    \item Máy tính: CPU Intel Core i7-10750H, RAM 16GB, không dùng GPU.
+    \item Các thuật toán được cài đặt từ đầu: GD, SGD (với bước giảm $\eta_t = \eta_0/(1 + \gamma t)$), SVRG với $m = 2n$, $\eta$ chọn qua grid search.
+\end{itemize}
+
+\section{Kịch bản thực nghiệm}
+\begin{enumerate}
+    \item So sánh đường hội tụ (suboptimality gap) theo epoch: mỗi epoch tương đương $n$ lần truy cập gradient thành phần. Với SVRG, một epoch vòng ngoài chứa 1 lần gradient toàn phần và $m$ gradient ngẫu nhiên nên chi phí quy đổi khoảng $(1 + m)$ lần truy cập thành phần; để so sánh, ta vẽ theo tổng số gradient thành phần / $n$.
+    \item Phân tích độ nhạy: thay đổi $m = n, 2n, 4n$ và $\eta$ để khảo sát ảnh hưởng.
+\end{enumerate}
+
+\section{Kết quả và phân tích}
+Hình \ref{fig:main} minh họa đường hội tụ điển hình trên MNIST. SVRG vượt trội rõ rệt so với SGD: sau vài chục epoch, SVRG đã đạt độ chính xác gần tối ưu, trong khi SGD vẫn dao động. So với GD, SVRG tiêu tốn ít gradient hơn để đạt cùng độ chính xác $10^{-6}$: cụ thể cần khoảng $500n$ gradient thành phần, ít hơn nhiều so với $n \times 5000$ của GD.
+
+Bảng \ref{tab:time} cho thấy thời gian huấn luyện thực tế. Nhờ tận dụng vector hóa, chi phí gradient toàn phần định kỳ không quá nặng.
+
+\begin{figure}[htbp]
+\centering
+\fbox{\parbox{0.6\textwidth}{\centering Biểu đồ so sánh giá trị hàm mục tiêu theo số epoch: \\ SGD (dao động), GD (đường dốc chậm), SVRG (hội tụ nhanh, ổn định).}}
+\caption{So sánh tốc độ hội tụ trên MNIST.}
+\label{fig:main}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Thời gian (giây) để đạt $P(w)-P(w^*) \le 10^{-6}$}
+\label{tab:time}
+\begin{tabular}{|c|c|c|}
+\hline
+Thuật toán & MNIST & HIGGS \\ \hline
+GD     & >3000 & >800 \\
+SGD    & 450   & 120 \\
+SVRG   & \textbf{28} & \textbf{9} \\
+\hline
+\end{tabular}
+\end{table}
+
+Thực nghiệm cũng cho thấy SVRG ít nhạy với bước nhảy hơn SGD miễn là $m$ đủ lớn. Với $m$ quá nhỏ, hội tụ chậm lại vì chi phí snapshot lớn.
+
+\section{Thảo luận hạn chế}
+Dữ liệu chỉ ở mức vừa, chưa thử trên tập siêu lớn. Tham số được tinh chỉnh thủ công, chưa dùng cơ chế thích nghi. GPU không được sử dụng nên so sánh thời gian có thể chưa phản ánh đúng lợi thế song song của mini-batch SVRG.
+
+\chapter{Kết luận và hướng phát triển}
+
+\section{Tóm tắt kết quả}
+Khóa luận đã trình bày cặn kẽ nguyên lý thu gọn phương sai dự báo, trọng tâm là thuật toán SVRG. Chúng tôi đã chứng minh tính hội tụ tuyến tính cho hàm lồi mạnh và chỉ ra rằng SVRG yêu cầu ít gradient toàn phần hơn GD, đồng thời tránh được nhược điểm dao động của SGD. Thực nghiệm trên hồi quy logistic và phân loại ảnh MNIST khẳng định SVRG cho tốc độ hội tụ nhanh, ổn định và ít nhạy cảm với tham số.
+
+\section{Đóng góp}
+Khóa luận cung cấp một tài liệu tiếng Việt có hệ thống về SVRG, kèm theo cài đặt minh họa. Phân tích so sánh với SAG, SAGA và SGD giúp người đọc có cái nhìn toàn cảnh về phương pháp giảm phương sai.
+
+\section{Hạn chế}
+\begin{itemize}
+    \item Chưa xét lớp bài toán không lồi (non‑convex) như mạng nơ-ron sâu.
+    \item Chưa thực nghiệm trên dữ liệu cực lớn ($n\approx 10^9$), nơi SVRG có thể lợi thế hơn.
+    \item So sánh với các biến thể mạnh hơn như Katyusha, SVRG với đà (momentum) chưa sâu.
+\end{itemize}
+
+\section{Hướng phát triển}
+ \begin{itemize}
+    \item Mở rộng SVRG cho bài toán không lồi, kết hợp kỹ thuật escape saddle point.
+    \item Kết hợp variance reduction với các bộ tối ưu thích nghi (Adam, RMSProp) để có được phương pháp vừa giảm phương sai vừa tự động chỉnh bước.
+    \item Áp dụng trong huấn luyện mạng nơ-ron trên GPU với mini‑batch song song.
+    \item Nghiên cứu phương pháp \emph{stochastic variance reduced gradient Langevin dynamics} cho suy luận Bayes.
+\end{itemize}
+
+\bibliographystyle{plainnat}
+\bibliography{tltk}
+\addcontentsline{toc}{chapter}{Tài liệu tham khảo}
+
+\end{document}

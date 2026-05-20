@@ -178,33 +178,33 @@ def compute_one(name, lam, multiclass):
         'final_loss': float(loss_hist[-1]),
     }
 
-if __name__ == '__main__':
-    results = compute_all_optimal()
-    save_optimal(results)
-
 # if __name__ == '__main__':
-#     filepath = 'results/optimal_loss.json'
+#     results = compute_all_optimal()
+#     save_optimal(results)
 
-#     # Load file cũ (nếu có)
-#     if os.path.exists(filepath):
-#         results = load_optimal(filepath)
-#     else:
-#         results = {}
+if __name__ == '__main__':
+    filepath = 'results/optimal_loss.json'
 
-#     # 👇 CHỈ ĐỔI TÊN DATASET BỊ SAI Ở ĐÂY
-#     name = 'covtype'   # ví dụ: mnist / cifar10 / rcv1 / covtype
+    # Load file cũ (nếu có)
+    if os.path.exists(filepath):
+        results = load_optimal(filepath)
+    else:
+        results = {}
 
-#     configs = {
-#         'mnist':   (1e-4, True),
-#         'cifar10': (1e-3, True),
-#         'rcv1':    (1e-5, False),
-#         'covtype': (1e-5, False),
-#     }
+    # 👇 CHỈ ĐỔI TÊN DATASET BỊ SAI Ở ĐÂY
+    name = 'covtype'   # ví dụ: mnist / cifar10 / rcv1 / covtype
 
-#     lam, multiclass = configs[name]
+    configs = {
+        'mnist':   (1e-4, True),
+        'cifar10': (1e-3, True),
+        'rcv1':    (1e-5, False),
+        'covtype': (1e-5, False),
+    }
 
-#     # 👇 chỉ chạy lại 1 dataset
-#     results[name] = compute_one(name, lam, multiclass)
+    lam, multiclass = configs[name]
 
-#     # save lại file
-#     save_optimal(results, filepath)
+    # 👇 chỉ chạy lại 1 dataset
+    results[name] = compute_one(name, lam, multiclass)
+
+    # save lại file
+    save_optimal(results, filepath)

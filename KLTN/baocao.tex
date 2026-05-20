@@ -1,0 +1,214 @@
+\documentclass[12pt, a4paper, oneside]{book}
+\usepackage{amsmath, amssymb, latexsym, amscd, amsthm,amstext}  % Typical maths resource packages
+\usepackage{graphics}                                           % Packages to allow inclusion of graphics
+\usepackage{color} 
+\usepackage{varwidth}                                             % For creating coloured text and background
+\usepackage{hyperref}                                           % For creating hyperlinks in cross references
+\usepackage[vietnamese]{babel}							%For writting Vietnamese
+
+\usepackage{anysize}											% to set the margin size 
+\marginsize{3cm}{2cm}{2cm}{2cm}				%\marginsize{left}{right}{top}{bottom}
+%\papersize{width}{height}										% sets the paper size
+\usepackage{multicol}
+\usepackage{wrapfig}  
+\usepackage{enumerate}
+\usepackage{dsfont}
+\usepackage{fancyhdr}
+\usepackage{commath}
+\usepackage{blkarray}
+\usepackage{makecell}
+\usepackage{tikz}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage{bbm}
+\usepackage{mathtools}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{placeins}
+\usepackage[format=plain, textfont=it]{caption}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{tcolorbox}
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+\usepackage{amsmath}
+\numberwithin{equation}{section}
+\lstdefinestyle{mystyle}{
+	backgroundcolor=\color{backcolour},   
+	commentstyle=\color{codegreen},
+	keywordstyle=\color{magenta},
+	numberstyle=\tiny\color{codegray},
+	stringstyle=\color{codepurple},
+	basicstyle=\ttfamily\footnotesize,
+	breakatwhitespace=false,         
+	breaklines=true,                 
+	captionpos=b,                    
+	keepspaces=true,                   
+	numbersep=5pt,                  
+	showspaces=false,                
+	showstringspaces=false,
+	showtabs=false,                  
+	tabsize=3
+}
+\hypersetup{hidelinks}
+\lstset{style=mystyle}
+\allowdisplaybreaks
+\usetikzlibrary{shapes, arrows, positioning}
+\graphicspath{ {./Images/} } 
+%
+%
+%\parindent 1cm
+%\parskip 0.2cm
+%\topmargin 0.2cm
+%\oddsidemargin 1cm
+%\evensidemargin 0.5cm
+%\textwidth 15cm
+%\textheight 21cm
+\renewcommand{\baselinestretch}{1.3} 
+\renewcommand{\figurename}{\bf Hình}
+\AtBeginDocument{%
+	\renewcommand{\listfigurename}{Danh mục hình vẽ}
+}
+\AtBeginDocument{%
+	\renewcommand{\listtablename}{Danh mục bảng biểu}
+}
+
+%%========================================
+\newtheorem{theo}{\bf Định lý}[section]
+\newtheorem{coro}[theo]{\bf Hệ quả}
+\newtheorem{lemm}[theo]{\bf Bổ đề}
+\newtheorem{prop}[theo]{\bf Mệnh đề}
+\newtheorem{algo}[theo]{\bf Algorithm}
+\newtheorem{conj}[theo]{\bf Conjecture}
+
+\theoremstyle{definition}
+\newtheorem{defi}[theo]{Định nghĩa}
+\newtheorem{vd}[theo]{\it Ví dụ}
+\newtheorem{cy}[theo]{\it Chú ý}
+\newtheorem{nx}[theo]{\it Nhận xét}
+\newtheorem{pt}{\it Phân tích}
+\newtheorem{remark}{Chú ý}[section]
+\DeclareMathOperator*{\argmin}{argmin}
+
+\def\R{\mathbb{ R}}
+\def\C{\mathbb{ C}}
+\def\N{\mathbb{ N}}
+\def\Z{\mathbb{ Z}}
+\def\Q{\mathbb{ Q}}
+\def\K{\mathbb{ K}}
+\def\Sy{\mathbb{ S}}
+\def\H{\mathbb{ H}}
+\def\T{\mathbb{ T}}
+\def\K{\mathbb{ K}}
+\def\E{\mathbb{ E}}
+\def\Po{\mathbb{ P}}
+\def\L{\mathbb{ L}}
+\def\qfun{\textsf{q}}
+%=========================================
+\def\rk{\mbox{\rm \texttt{rank}}}
+\def\tr{\mbox{\rm \texttt{Tr}}}  
+\def\diag{\mbox{\rm \texttt{diag}}}
+\def\re{\mbox{\rm \texttt{Re}}}
+\def\im{\mbox{\rm \texttt{Im}}}
+\def\face{\mbox{\rm \texttt{face}}}
+\def\ran{\mbox{\rm \texttt{Ran}}}
+\def\nul{\mbox{\rm \texttt{Nul}}}   
+\def\vect{\mbox{\rm \texttt{vec}}}
+\def\svec{\mbox{\rm \texttt{svec}}}
+\def\sp{\mbox{\rm \texttt{Span}}}
+
+
+% ding nghia lai kieu enumerate cho dep
+\newcommand{\seq}[1]{\left<#1\right>}
+\makeatletter
+\def\ps@myheadings{%
+	\def\@evenhead{\hfil\thepage\hfil}
+	\def\@oddhead{\hfil\thepage\hfil}}
+\makeatother 
+\usepackage{anysize}
+\marginsize{3cm}{2cm}{2cm}{2cm}
+\DeclareMathOperator{\sgn}{sgn}
+\DeclareMathOperator{\rank}{rank}
+\pagestyle{myheadings}
+
+
+
+\newcommand{\blue}[1]{\textcolor{blue}{#1}}
+\newcommand{\red}[1]{\textcolor{red}{#1}}
+\newcommand{\bff}[1]{\textbf{#1}}
+%=======================
+
+
+
+
+%\hf{}
+%\renewcommand{\headrulewidth}{0pt}
+%\fancyhead[C]{\thepage}
+%\pagestyle{fancy}
+%
+%%
+%%%% redefine the plain pagestyle
+%\fancypagestyle{plain}{%
+	%\fancyhf{} % clear all header and footer fields
+	%\fancyhead[C]{\thepage} % except the center
+	%}
+%\DeclareUnicodeCharacter{2212}{-}
+\setlength{\parindent}{1 cm}
+\usepackage{cases}
+\usepackage{graphicx}
+%===========================
+\begin{document}
+
+\pagestyle{fancy}
+\fancyhf{} % Xóa hết header và footer mặc định
+
+% Gạch ngang đầu và cuối trang
+\renewcommand{\headrulewidth}{0.4pt} % Gạch ngang đầu trang
+\renewcommand{\footrulewidth}{0.4pt} % Gạch ngang cuối trang
+
+% Hiển thị tên chương bên trái header (hoặc giữa)
+\fancyhead[L]{\nouppercase{\textit\leftmark}} % Tên chương
+% fancyhead[C]{} hoặc fancyhead[R]{} nếu muốn canh giữa hoặc phải
+
+% Số trang ở giữa hoặc bên phải footer
+\fancyfoot[C]{\thepage}
+
+	
+\input{Bia}
+
+\pagenumbering{roman}
+% \input{LoiCamOn}
+\frontmatter
+
+\tableofcontents
+
+\newpage
+
+\thispagestyle{empty}
+% \input{KyHieu}
+\listoffigures
+%\listoftables
+\newpage
+\pagenumbering{arabic}
+%\input{TomTat}
+
+% \input{MoDau}
+\mainmatter
+
+\input{Chuong1}
+
+\input{Chuong2}
+
+\input{Chuong3}
+
+\input{KetLuan}
+
+% Ở cuối tài liệu, trước \end{document}
+\bibliographystyle{plain}   % hoặc unsrt, alpha, abbrv, hoặc ieeetr, acm, ...
+\bibliography{tltk}          % không cần đuôi .bib, chỉ cần tên file
+
+\end{document}
+	

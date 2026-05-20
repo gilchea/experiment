@@ -1,0 +1,35 @@
+\chapter*{Phần mở đầu}
+\addcontentsline{toc}{chapter}{Phần mở đầu}
+
+\section*{Lý do chọn đề tài}
+Trong thập kỷ qua, học máy (machine learning) đã trở thành một trụ cột của trí tuệ nhân tạo, dựa trên nền tảng của các bài toán tối ưu hóa quy mô lớn. Một lớp bài toán điển hình là tối thiểu hóa rủi ro thực nghiệm (empirical risk minimization – ERM), có dạng
+\begin{equation}
+\min_{w \in \mathbb{R}^d} \Big\{ P(w) = \frac{1}{n}\sum_{i=1}^{n} f_i(w) + R(w) \Big\},
+\end{equation}
+trong đó $f_i$ thường là hàm mất mát (loss function) của mẫu dữ liệu thứ $i$, $R(w)$ là thành phần phạt (regularizer) và $n$ có thể lên đến hàng triệu. Các phương pháp gradient toàn phần (gradient descent – GD) đòi hỏi tính $\nabla P(w)$ trên toàn bộ tập huấn luyện, dẫn đến chi phí tính toán quá lớn. Để khắc phục, thuật toán trượt gradient ngẫu nhiên (stochastic gradient descent – SGD) sử dụng một ước lượng gradient từ một hoặc một vài mẫu, giúp giảm chi phí mỗi bước lặp. Tuy nhiên, ước lượng gradient trong SGD có phương sai cao, khiến thuật toán hội tụ chậm (hội tụ dưới tuyến tính – sublinear convergence) ngay cả với bài toán lồi mạnh (strongly convex).
+
+Nhằm dung hòa giữa chi phí rẻ của SGD và hội tụ tuyến tính của GD, các kỹ thuật thu gọn phương sai (variance reduction) đã ra đời. Trong số đó, công trình của \citet{johnson2013accelerating} với thuật toán SVRG (Stochastic Variance Reduced Gradient) là một đột phá: chỉ cần định kỳ tính gradient toàn phần tại một điểm neo (snapshot), SVRG có thể giảm phương sai về 0 khi tiến đến nghiệm và đạt tốc độ hội tụ tuyến tính với chi phí gradient tổng thấp hơn hẳn GD. Chủ đề này vừa có ý nghĩa lý thuyết sâu sắc, vừa mang tính thực tiễn cao cho các ứng dụng học máy ngày nay. Chính vì vậy, tôi chọn đề tài “Tìm hiểu cơ sở phương pháp luận của các giải thuật trượt Gradient ngẫu nhiên tăng cường sử dụng phép thu gọn phương sai dự báo và bước đầu áp dụng trong một số trường hợp cụ thể” làm khóa luận tốt nghiệp.
+
+\section*{Mục tiêu nghiên cứu}
+Khóa luận hướng tới ba mục tiêu chính:
+\begin{enumerate}
+    \item Trình bày một cách hệ thống cơ sở lý thuyết của các phương pháp giảm phương sai, đặc biệt là thuật toán SVRG và các biến thể của nó.
+    \item Phân tích hội tụ của SVRG cho bài toán lồi mạnh dưới góc nhìn xác suất, từ đó so sánh độ phức tạp với GD và SGD cổ điển.
+    \item Cài đặt thử nghiệm SVRG trên bài toán hồi quy logistic (logistic regression) và phân loại ảnh MNIST, đánh giá hiệu quả thông qua số lần duyệt dữ liệu và thời gian huấn luyện.
+\end{enumerate}
+
+\section*{Đối tượng và phạm vi nghiên cứu}
+Đối tượng nghiên cứu chính là các thuật toán SGD cải tiến sử dụng nguyên lý thu gọn phương sai dự báo, trọng tâm là SVRG. Phạm vi lý thuyết giới hạn trong lớp bài toán lồi mạnh có cấu trúc tổng hữu hạn (finite-sum) không có ràng buộc, với hàm thành phần $f_i$ khả vi và gradient Lipschitz liên tục; một số mở rộng sang bài toán lồi không mạnh hoặc có thành phần phạt không trơn được thảo luận sơ lược. Thực nghiệm được tiến hành trên tập dữ liệu cỡ vừa (MNIST, tập con của HIGGS) trong môi trường Python.
+
+\section*{Phương pháp nghiên cứu}
+Phương pháp nghiên cứu chủ yếu là phân tích lý thuyết và thực nghiệm kiểm chứng. Về lý thuyết, luận văn kế thừa các kết quả từ các bài báo gốc, hệ thống hóa các bổ đề và định lý, đồng thời bổ sung những chứng minh chi tiết. Về thực nghiệm, thuật toán được cài đặt trên Python (NumPy, Scikit-learn một phần), các đồ thị hội tụ được vẽ bằng Matplotlib. So sánh được thực hiện dựa trên giá trị hàm mục tiêu theo số lần duyệt dữ liệu (epoch) và thời gian chạy.
+
+\section*{Bố cục khóa luận}
+Ngoài phần mở đầu, tài liệu tham khảo và phụ lục, khóa luận gồm năm chương:
+\begin{itemize}
+    \item Chương 1: Giới thiệu chung – đặt bài toán, khảo sát GD/SGD, nhu cầu giảm phương sai và lược sử SAG, SAGA, SVRG.
+    \item Chương 2: Kiến thức chuẩn bị – các khái niệm giải tích lồi, hội tụ, phân tích GD và SGD cổ điển, phát biểu bài toán ERM.
+    \item Chương 3: Phương pháp tăng tốc SGD bằng thu gọn phương sai dự báo – chi tiết thuật toán SVRG, phân tích hội tụ, các biến thể và so sánh.
+    \item Chương 4: Thực nghiệm và đánh giá – mô tả cài đặt, kịch bản thí nghiệm, kết quả và phân tích.
+    \item Chương 5: Kết luận và hướng phát triển.
+\end{itemize}

@@ -1,0 +1,42 @@
+\documentclass[12pt]{book}
+\usepackage{vntex}
+\usepackage{geometry}
+\usepackage{mathtools}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{fancyhdr}%%header/footer
+\usepackage{pdfpages}%% include pages from another pdf file
+\usepackage{graphicx}
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[colorlinks=true]{hyperref}
+\usepackage{natbib}
+
+\begin{document}
+\frontmatter
+%%%TRANG BIA %%%
+%\includepdf{}
+\input{Bia}
+%% TRANG BIA PHU 
+%\includepdf{}
+\chapter*{Lời mở đầu}
+\input{lmd}
+\mainmatter
+\tableofcontents
+\listoffigures
+\listoftables
+% \chapter{Tiêu đề chương 1}
+\input{chuong1}
+% \chapter{Tiêu đề chương 2}
+\input{chuong2}
+% \chapter{Tiêu đề chương 3}
+\input{chuong3}
+\input{thucngiem}
+% \chapter*{Kết luận}
+\addcontentsline{toc}{chapter}{Kết luận}
+\input{ketluan}
+\backmatter
+\bibliographystyle{plain}
+\bibliography{tltk}
+
+\end{document}
