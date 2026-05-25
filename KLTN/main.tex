@@ -4,37 +4,105 @@
 \usepackage{mathtools}
 \usepackage{amssymb}
 \usepackage{amsthm}
-\usepackage{fancyhdr}%%header/footer
-\usepackage{pdfpages}%% include pages from another pdf file
+\usepackage{fancyhdr}
+\usepackage{pdfpages}
 \usepackage{graphicx}
 \usepackage[utf8]{inputenc}
 \usepackage[T5]{fontenc}
 \usepackage[colorlinks=true]{hyperref}
 \usepackage{natbib}
+\usepackage[intoc]{nomencl}
+\makenomenclature
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\usepackage{minted}
+
+\lstset{
+    language=Python,
+    basicstyle=\footnotesize\ttfamily,
+    frame=lines,
+    numbers=left,
+    numberstyle=\tiny,
+    breaklines=true,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red}
+} 
+
+\usepackage{algorithm}
+\usepackage{algpseudocode} 
+\usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+
+% === CẤU HÌNH HEADER/FOOTER ===
+\pagestyle{fancy}
+\fancyhf{}  % Xóa mọi cài đặt cũ
+
+% Footer: số trang ở giữa
+\fancyfoot[C]{\thepage}
+
+% Header: hiển thị tên chương bên trái (trang chẵn/lẻ tự động)
+\fancyhead[LE]{\leftmark}   % LE: left-even, RO: right-odd
+\fancyhead[LO]{\rightmark}            % để trống các vị trí còn lại
+
+% Đường kẻ
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0pt}
+
+% Khoảng cách
+\setlength{\headheight}{15pt}   % Chiều cao vùng header
+\setlength{\headsep}{25pt}      % Khoảng cách từ header đến nội dung (tăng lên để cách xa hơn)
+
+% === KHỞI TẠO MÔI TRƯỜNG CHO ĐỊNH LÝ / ĐỊNH NGHĨA ===
+\theoremstyle{definition}
+\newtheorem{definition}{Định nghĩa}[chapter]
+\newtheorem{example}{Ví dụ}[chapter]
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Định lý}[chapter]
+\newtheorem{lemma}[theorem]{Bổ đề}
+\newtheorem{proposition}[theorem]{Mệnh đề}
+\newtheorem{corollary}[theorem]{Hệ quả}
+
+\theoremstyle{remark}
+\newtheorem{remark}{Nhận xét}[chapter]
+% ====================================================
+
+% === THÊM DÒNG NÀY NẾU Overleaf KHÔNG TỰ CHẠY ===
+\RequirePackage{etoolbox}
+\makeatletter
+\preto{\@outputdocument}{\mbox{\makenomenclature}}
+\makeatother
+% ===============================================
 
 \begin{document}
+
 \frontmatter
-%%%TRANG BIA %%%
-%\includepdf{}
 \input{Bia}
-%% TRANG BIA PHU 
-%\includepdf{}
 \chapter*{Lời mở đầu}
 \input{lmd}
+
 \mainmatter
 \tableofcontents
+
+% === NÊN ĐẶT BẢNG KÝ HIỆU Ở ĐÂY ===
+\printnomenclature*[2.5cm]  % Sau mục lục, trước list of figures
+
 \listoffigures
 \listoftables
-% \chapter{Tiêu đề chương 1}
+
+% Phần nội dung chính
 \input{chuong1}
-% \chapter{Tiêu đề chương 2}
 \input{chuong2}
-% \chapter{Tiêu đề chương 3}
 \input{chuong3}
 \input{thucngiem}
-% \chapter*{Kết luận}
+
+\chapter*{Kết luận}
 \addcontentsline{toc}{chapter}{Kết luận}
 \input{ketluan}
+
 \backmatter
 \bibliographystyle{plain}
 \bibliography{tltk}

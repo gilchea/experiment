@@ -1,483 +1,270 @@
 \chapter{Phương pháp tăng tốc SGD bằng thu gọn phương sai dự báo}
-\label{chap:svrg}
-
-Chương này trình bày trọng tâm của luận văn: thuật toán Stochastic Variance Reduced Gradient (SVRG) và cơ sở phương pháp luận của nó. Xuất phát từ nhược điểm cố hữu của SGD về phương sai cao, chúng ta sẽ thấy làm thế nào việc sử dụng một gradient tham chiếu toàn phần định kỳ có thể tạo ra một ước lượng gradient mới không chệch nhưng có phương sai giảm dần về không. Cấu trúc vòng lặp lồng, phân tích hội tụ, các biến thể và so sánh với các phương pháp giảm phương sai khác sẽ lần lượt được đề cập.
 
 \section{Động lực và ý tưởng chính của Predictive Variance Reduction}
-\label{sec:svrg_motivation}
 
-Như đã phân tích trong Mục~\ref{sec:sgd}, nhược điểm căn bản của SGD cổ điển nằm ở chỗ gradient ngẫu nhiên $\nabla f_{i_t}(w_t)$, dù là ước lượng không chệch của gradient toàn phần $\nabla P(w_t)$, lại mang trong mình một phương sai (variance) đáng kể không tự triệt tiêu khi thuật toán tiến đến nghiệm $w^*$. Cụ thể, phương sai
-\begin{equation}
-\mathbb{E}_{i_t} \bigl\| \nabla f_{i_t}(w_t) - \nabla P(w_t) \bigr\|^2
-\label{eq:sgd_var_remind}
-\end{equation}
-nói chung là một đại lượng dương ngay cả khi $w_t = w^*$, trừ phi tất cả các hàm thành phần $f_i$ cùng đạt cực tiểu tại cùng một điểm (điều kiện nội suy). Nhiễu dai dẳng này buộc SGD phải dùng bước học giảm dần, dẫn đến tốc độ hội tụ dưới tuyến tính $O(1/T)$.
-
-Câu hỏi tự nhiên đặt ra là: liệu có thể \emph{hiệu chỉnh} gradient ngẫu nhiên để giảm phương sai của nó, lý tưởng là làm cho phương sai tiến về $0$ khi $w_t$ đến gần $w^*$? Nếu làm được điều đó, ta có thể dùng bước học cố định và hy vọng khôi phục được hội tụ tuyến tính như GD, trong khi vẫn duy trì chi phí mỗi bước rẻ như SGD.
+Như đã phân tích ở Chương 2, rào cản cốt lõi khiến phương pháp trượt gradient ngẫu nhiên (SGD) cổ điển không thể đạt được tốc độ hội tụ nhanh là do sự tồn tại của nhiễu phương sai cố định, không tự động suy giảm khi chuỗi tham số tiến gần về phía nghiệm tối ưu. Để khắc phục triệt để điểm thắt nút cổ chai này mà không làm gia tăng không gian lưu trữ bộ nhớ khổng lồ như các phương pháp SAG hay SAGA, Johnson và Zhang \cite{johnson2013accelerating} đã đề xuất một cơ chế đột phá mang tên Kỹ thuật thu gọn phương sai dự báo (Predictive Variance Reduction). Ý tưởng trung tâm của kỹ thuật này là sử dụng thông tin gradient toàn cục tại một điểm chụp cố định trong quá khứ để làm mốc dự báo, từ đó hiệu chỉnh hướng trượt ngẫu nhiên ở hiện tại, ép phương sai của ước lượng tiến dần về mức không một cách tự nhiên.
 
 \subsection{Ước lượng gradient hiệu chỉnh}
 
-Ý tưởng then chốt của SVRG, được gọi là \textbf{thu gọn phương sai dự báo} (predictive variance reduction), là sử dụng một \textbf{gradient tham chiếu} $\nabla P(\tilde{w})$ được tính toán chính xác trên toàn bộ tập dữ liệu tại một điểm \textbf{neo} (snapshot) $\tilde{w}$, xuất hiện định kỳ. Giả sử ta có sẵn $\tilde{w}$ và đã tính $\nabla P(\tilde{w})$. Tại một điểm lặp $w_t$ nào đó trong quá trình tối ưu, nếu ta đơn thuần dùng $\nabla f_{i_t}(w_t)$ thì phương sai sẽ cao. Thay vào đó, ta khai thác sự kiện $\tilde{w}$ đã được biết để tạo ra một ước lượng mới:
+Để hiện thực hóa ý tưởng trên, thuật toán Stochastic Variance Reduced Gradient (SVRG) được thiết kế dựa trên một cấu trúc hai vòng lặp lồng nhau (dual-loop framework). Theo nghiên cứu nguyên bản của Johnson và Zhang \cite{johnson2013accelerating}, tại khởi đầu của mỗi chu kỳ (epoch) lớn, thuật toán tiến hành giữ lại một điểm chụp (snapshot), ký hiệu là $\tilde{w}$. Tại điểm chụp này, thuật toán thực hiện tính toán một vectơ gradient toàn phần chính xác (full gradient) trên toàn bộ tập dữ liệu huấn luyện:
 \begin{equation}
-v_t = \nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w}) + \nabla P(\tilde{w}).
-\label{eq:svrg_estimator_motivation}
+\nabla P(\tilde{w}) = \frac{1}{n} \sum_{i=1}^n \nabla \psi_i(\tilde{w})
 \end{equation}
+Vectơ $\nabla P(\tilde{w})$ sau đó được lưu trữ cố định để làm thông tin tham chiếu xuyên suốt vòng lặp ngẫu nhiên nội bộ của chu kỳ đó. 
 
-Ta hãy phân tích cấu trúc của $v_t$:
-\begin{itemize}
-    \item $\nabla f_{i_t}(w_t)$ là gradient ngẫu nhiên tại điểm hiện tại $w_t$.
-    \item $\nabla f_{i_t}(\tilde{w})$ là gradient của \emph{cùng một mẫu} $i_t$ nhưng được tính tại điểm neo $\tilde{w}$.
-    \item $\nabla P(\tilde{w})$ là gradient toàn phần \emph{chính xác} tại điểm neo.
-\end{itemize}
-Số hạng $\nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w})$ đo lường sự thay đổi của gradient của mẫu $i_t$ khi di chuyển từ $\tilde{w}$ đến $w_t$, trong khi $\nabla P(\tilde{w})$ đóng vai trò như một giá trị nền (baseline) chính xác.
+Tại mỗi bước lặp ngẫu nhiên $t$ bên trong chu kỳ, thay vì chỉ sử dụng trực tiếp vectơ gradient ngẫu nhiên độc lập $\nabla \psi_{i_t}(w_{t-1})$ thu được từ một mẫu dữ liệu $i_t \in \{1, \dots, n\}$ chọn ngẫu nhiên như SGD, SVRG thiết lập một công thức hiệu chỉnh gradient hiển thị (explicitly modified gradient estimator) theo quy tắc cập nhật sau \cite{johnson2013accelerating}:
+\begin{equation}\label{eq:svrg_estimator}
+v_t = \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \nabla P(\tilde{w})
+\end{equation}
+Vectơ $v_t$ định hình hướng trượt mới cho tham số: $w_t = w_{t-1} - \eta v_t$. Trong công thức (\ref{eq:svrg_estimator}), số hạng $\nabla \psi_{i_t}(\tilde{w})$ biểu thị giá trị gradient của riêng mẫu $i_t$ được đánh giá lại tại vị trí điểm chụp quá khứ $\tilde{w}$. Sự kết hợp của bộ ba thành phần này tạo nên một cơ chế bù trừ nhiễu động lực học vô cùng tinh gọn.
 
 \subsection{Tính không chệch}
 
-Một tính chất quan trọng của $v_t$ là nó vẫn là một ước lượng \textbf{không chệch} (unbiased) của $\nabla P(w_t)$. Quả thật, lấy kỳ vọng theo mẫu $i_t$ (phân phối đều trên $\{1,\dots,n\}$):
+Một yêu cầu tiên quyết đối với bất kỳ ước lượng ngẫu nhiên nào trong tối ưu hóa xấp xỉ là phải đảm bảo tính không chệch (unbiased property) để hướng dịch chuyển trung bình của thuật toán không bị lệch khỏi quỹ đạo tối ưu. Johnson và Zhang \cite{johnson2013accelerating} đã chứng minh một cách tường minh rằng ước lượng gradient hiệu chỉnh $v_t$ hoàn toàn thỏa mãn đặc tính toán học này.
+
+Xét kỳ vọng điều kiện của vectơ $v_t$ tại bước lặp $t$, lấy theo chỉ số mẫu ngẫu nhiên $i_t$ và cố định toàn bộ lịch sử các bước lặp trước đó (ký hiệu điều kiện ngắn gọn là $\mathbb{E}_{i_t}$), ta có biến đổi đại số sau:
 \begin{align}
-\mathbb{E}_{i_t}[v_t] &= \mathbb{E}_{i_t} \bigl[ \nabla f_{i_t}(w_t) \bigr] - \mathbb{E}_{i_t} \bigl[ \nabla f_{i_t}(\tilde{w}) \bigr] + \nabla P(\tilde{w}) \nonumber\\
-&= \nabla P(w_t) - \nabla P(\tilde{w}) + \nabla P(\tilde{w}) \nonumber\\
-&= \nabla P(w_t).
-\label{eq:svrg_unbiased}
+\mathbb{E}_{i_t} \left[ v_t \right] &= \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \nabla P(\tilde{w}) \right] \\
+&= \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(w_{t-1}) \right] - \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(\tilde{w}) \right] + \nabla P(\tilde{w})
 \end{align}
-Như vậy, về mặt kỳ vọng, $v_t$ cư xử giống hệt như gradient toàn phần tại $w_t$. Sự khác biệt – và cũng là ưu điểm vượt trội – nằm ở phương sai của nó.
+Do chỉ số $i_t$ được lấy mẫu ngẫu nhiên đều từ tập hợp $\{1, \dots, n\}$, theo định nghĩa của gradient toàn phần, ta thu được các biểu thức kỳ vọng thành phần:
+\begin{equation}
+\mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(w_{t-1}) \right] = \nabla P(w_{t-1}) \quad \text{và} \quad \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(\tilde{w}) \right] = \nabla P(\tilde{w})
+\end{equation}
+Thay thế các kết quả này ngược trở lại biểu thức tổng quát, hai số hạng chứa thông tin điểm chụp $\nabla P(\tilde{w})$ tự động triệt tiêu lẫn nhau:
+\begin{equation}
+\mathbb{E}_{i_t} \left[ v_t \right] = \nabla P(w_{t-1}) - \nabla P(\tilde{w}) + \nabla P(\tilde{w}) = \nabla P(w_{t-1})
+\end{equation}
+Chứng minh toán học ngắn gọn này xác nhận rằng, tại mỗi bước lặp ngẫu nhiên đơn lẻ, mặc dù thành phần cốt lõi được tính toán trên một mẫu dữ liệu, kỳ vọng toán học của ước lượng SVRG luôn trùng khớp một cách chính xác với vectơ gradient toàn cục $\nabla P(w_{t-1})$. Đặc tính này khẳng định SVRG giữ vững bản chất hình học của phương pháp trượt gradient, đồng thời tạo cơ sở cho các phân tích hội tụ chặt chẽ sau này.
 
 \subsection{Phương sai được thu gọn}
 
-Ta xét phương sai của $v_t$:
-\begin{equation}
-\mathbb{E}_{i_t} \bigl\| v_t - \nabla P(w_t) \bigr\|^2 = \mathbb{E}_{i_t} \bigl\| \bigl( \nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w}) \bigr) - \bigl( \nabla P(w_t) - \nabla P(\tilde{w}) \bigr) \bigr\|^2.
-\end{equation}
-Sử dụng bất đẳng thức cơ bản $\mathbb{E}\|X - \mathbb{E}X\|^2 \le \mathbb{E}\|X\|^2$ (phương sai không vượt quá moment bậc hai), ta có thể chặn đại lượng này bởi
-\begin{align}
-\mathbb{E}_{i_t} \bigl\| v_t - \nabla P(w_t) \bigr\|^2 &\le \mathbb{E}_{i_t} \bigl\| \nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w}) \bigr\|^2 \nonumber\\
-&\le L^2 \| w_t - \tilde{w} \|^2,
-\label{eq:svrg_var_bound_motivation}
-\end{align}
-trong đó bất đẳng thức cuối cùng đến từ giả thiết mỗi $f_i$ là $L$‑trơn (gradient Lipschitz liên tục với hằng số $L$). Kết quả này mang một ý nghĩa sâu sắc: \textbf{phương sai của ước lượng gradient trong SVRG bị chặn bởi bình phương khoảng cách từ điểm lặp hiện tại đến điểm neo}. Khi $w_t$ ở gần $\tilde{w}$, phương sai là nhỏ; và quan trọng hơn, khi cả $w_t$ và $\tilde{w}$ cùng hội tụ về nghiệm $w^*$, khoảng cách $\|w_t - \tilde{w}\|$ tiến về $0$, kéo theo phương sai cũng tiến về $0$.
+Mặc dù có cùng kỳ vọng không chệch như SGD cổ điển, sự khác biệt mang tính cách mạng của SVRG nằm ở cấu trúc toán học của phương sai ước lượng. Phân tích định lượng của Johnson và Zhang \cite{johnson2013accelerating} chỉ ra rằng, đại lượng phương sai của ước lượng gradient $v_t$ được kiểm soát và thu hẹp dựa trên khoảng cách giữa điểm lặp hiện tại $w_{t-1}$ và điểm chụp $\tilde{w}$.
 
-Đây chính là bản chất của thuật ngữ \textbf{thu gọn phương sai} (variance reduction): thay vì chịu đựng một phương sai nền không đổi như SGD, SVRG chủ động làm cho nhiễu gradient \emph{biến mất} theo tiến trình tối ưu. Điều này mở đường cho việc sử dụng một bước học cố định $\eta$ và đạt được hội tụ tuyến tính.
+Khi tiến trình tối ưu hóa diễn ra thành công, cả chuỗi tham số hiện tại $w_{t-1}$ và điểm chụp định kỳ $\tilde{w}$ đều hội tụ tiệm cận về phía nghiệm tối ưu toàn cục $w^*$. Tại lân cận của nghiệm tối ưu, do tính chất liên tục của các hàm thành phần, giá trị gradient ngẫu nhiên $\nabla \psi_{i_t}(w_{t-1})$ sẽ tiến sát về mặt giá trị đại số với $\nabla \psi_{i_t}(\tilde{w})$. Do đó, hiệu số giữa chúng sẽ triệt tiêu:
+\begin{equation}
+\left( \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) \right) \to 0
+\end{equation}
+Đồng thời, theo điều kiện tối ưu bậc một, gradient toàn cục tại điểm chụp cũng tiến về vectơ không: $\nabla P(\tilde{w}) \to 0$. Kết hợp các xu hướng này, lượng phương sai của ước lượng:
+\begin{equation}
+\text{Var}(v_t) = \mathbb{E}_{i_t} \left[ \|v_t - \nabla P(w_{t-1})\|^2 \right]
+\end{equation}
+sẽ tự động suy giảm và triệt tiêu hoàn toàn về 0 khi thuật toán tiệm cận nghiệm $w^*$. 
+
+Dưới góc nhìn tổng quan hiện đại, Driggs và các cộng sự \cite{driggs2022accelerating} đã làm rõ rằng kỹ thuật thu gọn phương sai (VR) thiết lập một cơ chế đảm bảo sai số bình phương trung bình (Mean Squared Error - MSE) của toán tử ước lượng gradient giảm dần theo cấp số nhân qua các chu kỳ huấn luyện. Việc triệt tiêu năng lượng nhiễu này giải phóng thuật toán khỏi sự kìm hãm của điều kiện Robbins-Monro, cho phép SVRG duy trì một hệ số bước học $\eta$ cố định (hằng số) xuyên suốt quá trình thực thi mà không sợ hiện tượng dao động phân kỳ, từ đó khôi phục thành công tốc độ hội tụ tuyến tính hàm mũ lý tưởng của GD.
 
 \subsection{Từ ý tưởng đến thuật toán}
 
-Ý tưởng trên đặt ra hai vấn đề cần giải quyết để trở thành một thuật toán hoàn chỉnh:
-\begin{enumerate}
-    \item \textbf{Chọn điểm neo $\tilde{w}$ như thế nào?} Rõ ràng, nếu $\tilde{w}$ được giữ cố định trong suốt quá trình tối ưu, khoảng cách $\|w_t - \tilde{w}\|$ sẽ không tiến về $0$ khi $w_t \to w^*$ (trừ khi $\tilde{w} = w^*$ ngay từ đầu). Do đó, điểm neo cần được \emph{cập nhật định kỳ} để bắt kịp tiến trình của các điểm lặp.
-    \item \textbf{Tần suất cập nhật điểm neo là bao nhiêu?} Nếu cập nhật quá thường xuyên (tức là tính lại gradient toàn phần $\nabla P(\tilde{w})$ sau mỗi vài bước), chi phí sẽ trở nên nặng nề, làm mất đi ưu thế về giá thành rẻ của SGD. Ngược lại, nếu cập nhật quá thưa, điểm neo sẽ tụt hậu xa so với $w_t$, khiến chặn phương sai $L^2 \|w_t - \tilde{w}\|^2$ trở nên lớn, làm giảm tốc độ hội tụ.
-\end{enumerate}
-
-Thuật toán SVRG của \citet{johnson2013accelerating} đưa ra một giải pháp cân bằng: tổ chức quá trình tối ưu thành các \textbf{vòng lặp lồng} (nested loops). Vòng ngoài (outer loop) – hay còn gọi là \emph{epoch} – sẽ tính gradient toàn phần tại điểm neo hiện tại. Vòng trong (inner loop) thực hiện $m$ bước cập nhật với ước lượng gradient hiệu chỉnh $v_t$ nhưng sử dụng chung một điểm neo (và do đó dùng chung $\nabla P(\tilde{w})$ trong suốt $m$ bước). Sau $m$ bước, điểm neo được cập nhật thành điểm lặp mới nhất (hoặc trung bình của các điểm trong vòng trong), và một epoch mới bắt đầu.
-
-Sự kết hợp này mang lại một sự cân bằng tinh tế: chi phí gradient toàn phần được khấu hao (amortized) trên $m$ bước rẻ tiền phía sau, trong khi phương sai vẫn được kiểm soát vì $m$ được chọn không quá lớn. Chứng minh hội tụ sẽ chỉ ra rằng với $m$ và $\eta$ được chọn thích hợp, mỗi epoch co rút kỳ vọng sai số theo một hệ số nhỏ hơn $1$, dẫn đến hội tụ tuyến tính tổng thể. Chi tiết của thuật toán sẽ được trình bày trong mục tiếp theo.
-
-\section{Thuật toán SVRG (Johnson \& Zhang, 2013)}
-\label{sec:svrg_algorithm}
-
-Trên nền tảng ý tưởng đã trình bày, Johnson và Zhang \cite{johnson2013accelerating} đã đề xuất thuật toán \textbf{Stochastic Variance Reduced Gradient} (SVRG) với cấu trúc hai vòng lặp lồng (nested loop) đặc trưng. Mục này mô tả chi tiết cấu trúc đó, đưa ra giả mã hoàn chỉnh và thảo luận về cách thức vận hành cũng như ưu điểm của SVRG so với SGD cổ điển.
-
-\subsection{Cấu trúc vòng lặp lồng}
-\label{subsec:svrg_structure}
-
-SVRG tổ chức quá trình tối ưu thành một chuỗi các \textbf{epoch} (hay còn gọi là \textbf{vòng ngoài} – outer loop). Mỗi epoch $s$ ($s = 0, 1, 2, \dots$) hoạt động dựa trên một điểm neo (snapshot point) $\tilde{w}_s$, được xem như một tham chiếu ổn định cho toàn bộ epoch đó. Tại thời điểm bắt đầu epoch $s$, ta tính \textbf{gradient toàn phần} (full gradient) tại điểm neo này:
+Để thấu hiểu sâu sắc cách thức chuyển đổi từ một ý tưởng lý thuyết thuần túy thành một thuật toán thực thi hiệu quả, Johnson và Zhang \cite{johnson2013accelerating} đã cung cấp một góc nhìn thông qua việc xây dựng một hàm mục tiêu phụ trợ (auxiliary function). Thay vì giải bài toán trên hàm mất mát gốc $\psi_i(w)$, tại mỗi chu kỳ với điểm chụp $\tilde{w}$ cố định, ta có thể xem xét việc áp dụng SGD truyền thống trên một lớp hàm số biến đổi mới, định nghĩa cho từng mẫu dữ liệu $i$ như sau:
 \begin{equation}
-\tilde{\mu}_s = \nabla P(\tilde{w}_s) = \frac{1}{n}\sum_{i=1}^{n} \nabla f_i(\tilde{w}_s).
-\label{eq:svrg_full_grad}
+\tilde{\psi}_i(w) := \psi_i(w) - \langle \nabla \psi_i(\tilde{w}) - \nabla P(\tilde{w}), w \rangle
 \end{equation}
-Việc tính $\tilde{\mu}_s$ đòi hỏi duyệt qua toàn bộ tập dữ liệu, với chi phí $\mathcal{O}(n d)$. Tuy nhiên, chi phí này sẽ được khấu hao trên toàn bộ epoch.
+Hàm phụ trợ $\tilde{\psi}_i(w)$ được thiết kế bằng cách bổ sung một số hạng tuyến tính vào hàm gốc. Khi tiến hành tính toán vectơ gradient của hàm phụ trợ này theo biến số $w$, ta thu được biểu thức:
+\begin{equation}
+\nabla \tilde{\psi}_i(w) = \nabla \psi_i(w) - \nabla \psi_i(\tilde{w}) + \nabla P(\tilde{w})
+\end{equation}
+Biểu thức đạo hàm này trùng khớp hoàn toàn với công thức ước lượng gradient hiệu chỉnh $v_t$ của SVRG trong phương trình (\ref{eq:svrg_estimator}). 
 
-Sau khi có $\tilde{\mu}_s$, thuật toán bước vào \textbf{vòng trong} (inner loop) gồm $m$ bước lặp. Điểm bắt đầu của vòng trong được đặt chính bằng điểm neo: $w_0^{(s)} = \tilde{w}_s$. Với mỗi $t = 0, 1, \dots, m-1$, các thao tác sau được thực hiện:
+Hơn nữa, nếu lấy trung bình tổng thể của các hàm phụ trợ này trên toàn bộ tập dữ liệu, ta phát
 
-\begin{enumerate}
-    \item \textbf{Chọn mẫu ngẫu nhiên:} Lấy một chỉ số $i_t \in \{1, 2, \dots, n\}$ theo phân phối đều (mỗi mẫu có xác suất $1/n$ được chọn).
-    \item \textbf{Tính gradient hiệu chỉnh:} Xây dựng ước lượng gradient $v_t^{(s)}$ theo công thức đặc trưng của SVRG:
-    \begin{equation}
-    v_t^{(s)} = \nabla f_{i_t}(w_t^{(s)}) - \nabla f_{i_t}(\tilde{w}_s) + \tilde{\mu}_s.
-    \label{eq:svrg_inner_grad}
-    \end{equation}
-    \item \textbf{Cập nhật tham số:} Tiến một bước xuống dốc với bước học cố định $\eta > 0$:
-    \begin{equation}
-    w_{t+1}^{(s)} = w_t^{(s)} - \eta \, v_t^{(s)}.
-    \label{eq:svrg_inner_update}
-    \end{equation}
-\end{enumerate}
+\subsection{Thuật toán SVRG}
 
-Sau khi hoàn thành $m$ bước lặp trong, epoch $s$ kết thúc. Điểm neo cho epoch tiếp theo, $\tilde{w}_{s+1}$, có thể được chọn theo một trong các cách sau:
+\subsubsection{Cấu trúc vòng lặp lồng}
+
+Cơ chế thu gọn phương sai dự báo được hiện thực hóa một cách tường minh thông qua cấu trúc thuật toán hai vòng lặp lồng nhau (dual-loop framework) vô cùng đặc trưng của SVRG. Theo thiết kế nguyên bản của Johnson và Zhang \cite{johnson2013accelerating}, giải thuật phân tách tiến trình tối ưu thành hai tầng xử lý bổ trợ nhau:
+
 \begin{itemize}
-    \item \textbf{Lấy điểm cuối:} $\tilde{w}_{s+1} = w_m^{(s)}$.
-    \item \textbf{Lấy trung bình:} $\tilde{w}_{s+1} = \frac{1}{m}\sum_{t=1}^{m} w_t^{(s)}$.
-    \item \textbf{Chọn ngẫu nhiên:} $\tilde{w}_{s+1} = w_t^{(s)}$ với $t$ được chọn ngẫu nhiên trong $\{1,\dots,m\}$.
+    \item \textbf{Vòng lặp ngoài (Outer Loop):} Đại diện cho các chu kỳ lớn (epochs), được ký hiệu bằng chỉ số $s = 1, 2, \dots$. Tại khởi đầu của mỗi chu kỳ $s$, thuật toán thực hiện hai tác vụ then chốt. Thứ nhất, nó chụp lại trạng thái tham số hiện tại để thiết lập điểm chụp cố định $\tilde{w} = w_{s-1}$. Thứ hai, thuật toán duyệt qua toàn bộ $n$ mẫu dữ liệu của tập huấn luyện để tính toán và lưu trữ vectơ gradient toàn phần chính xác $\nabla P(\tilde{w})$. Chi phí tính toán tại vòng lặp ngoài đạt mức $\mathcal{O}(n)$, đóng vai trò xây dựng "bản đồ tri thức toàn cục" cho chu kỳ đó.
+    \item \textbf{Vòng lặp trong (Inner Loop):} Hoạt động dựa trên thông tin tĩnh từ vòng lặp ngoài, thực thi một số lượng cố định $m$ bước cập nhật ngẫu nhiên độc lập (với chỉ số bước $t = 1, \dots, m$). Tại mỗi bước $t$, thuật toán lấy mẫu ngẫu nhiên một chỉ số $i_t$ để tính toán cặp gradient $\nabla \psi_{i_t}(w_{t-1})$ và $\nabla \psi_{i_t}(\tilde{w})$. Nhờ có sẵn giá trị $\nabla P(\tilde{w})$ từ bộ nhớ, SVRG lập tức tổng hợp được vectơ hiệu chỉnh $v_t$ với chi phí siêu nhẹ là $\mathcal{O}(1)$ cho mỗi bước trượt.
 \end{itemize}
-Cách chọn phổ biến nhất trong lý thuyết cũng như thực nghiệm là lấy điểm cuối ($\tilde{w}_{s+1} = w_m^{(s)}$), và đó cũng là phương án được sử dụng trong phần lớn các phân tích dưới đây. Tuy nhiên, về mặt lý thuyết, việc chọn ngẫu nhiên $t$ (option III trong bài báo gốc) giúp đơn giản hóa chứng minh hội tụ.
 
-Toàn bộ quá trình trên được lặp lại trong $S$ epoch. Đầu ra của thuật toán thường là điểm neo cuối cùng $\tilde{w}_S$, hoặc trung bình của các điểm neo trong vài epoch cuối.
+Sự kết hợp tinh tế này giúp SVRG triệt tiêu hoàn toàn điểm nghẽn bộ nhớ của SAG/SAGA. Thay vì phải lưu trữ đồng thời $n$ vectơ gradient lịch sử trong không gian máy tính, SVRG chỉ yêu cầu lưu trữ duy nhất một vectơ gradient toàn phần $\nabla P(\tilde{w})$, đưa chi phí bộ nhớ về mức tối giản $\mathcal{O}(d)$ \cite{johnson2013accelerating}.
 
-\subsection{Giả mã}
-\label{subsec:svrg_pseudocode}
+\subsubsection{Giả mã thuật toán}
 
-Giả mã đầy đủ của SVRG cơ bản được trình bày trong Thuật toán~\ref{alg:svrg}.
+Dưới đây là cấu trúc mã giả chính thức của thuật toán SVRG được xây dựng đồng bộ theo nguyên bản thiết kế của Johnson và Zhang \cite{johnson2013accelerating} kết hợp với các mô tả chuẩn hóa từ Schmidt và cộng sự \cite{schmidt2017minimizing}:
 
-\begin{algorithm}[htbp]
-\caption{SVRG (Stochastic Variance Reduced Gradient)}
+\begin{algorithm}[H]
+\SetAlgoLined
+\KwIn{Hệ số bước học cố định $\eta > 0$, độ dài vòng lặp trong $m$, điểm khởi tạo ban đầu $\tilde{w}_0 \in \mathbb{R}^d$.}
+\BlankLine
+\For{$s = 1, 2, \dots$}{
+    $\tilde{w} = \tilde{w}_{s-1}$\;
+    
+    $\tilde{\mu} = \nabla P(\tilde{w}) = \frac{1}{n} \sum_{i=1}^n \nabla \psi_i(\tilde{w})$\;
+    
+    $w_0 = \tilde{w}$\;
+    
+    \For{$t = 1, 2, \dots, m$}{
+        Lấy mẫu ngẫu nhiên chỉ số $i_t \in \{1, \dots, n\}$ theo phân phối đều\;
+        $v_t = \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \tilde{\mu}$\;
+        
+        $w_t = w_{t-1} - \eta v_t$\;
+    }
+    \textbf{Tùy chọn thiết lập đầu ra chu kỳ:} \;
+    
+    \underline{Lựa chọn 1:} $\tilde{w}_s = w_m$ \quad (Chọn điểm cuối cùng)\;
+    
+    % \underline{Lựa chọn 2:} $\tilde{w}_s = \frac{1}{m} \sum_{t=1}^m w_{t-1}$ \quad (Chọn điểm trung bình)\;
+    
+    \underline{Lựa chọn 2:} $\tilde{w}_s = w_t$ với $t$ được chọn ngẫu nhiên đều từ $\{0, \dots, m-1\}$\;
+}
+\caption{Thuật toán Stochastic Variance Reduced Gradient (SVRG)}
 \label{alg:svrg}
-\begin{algorithmic}[1]
-\REQUIRE Bước học $\eta > 0$, số epoch $S$, số bước vòng trong $m$, điểm khởi tạo $\tilde{w}_0 \in \mathbb{R}^d$.
-\FOR{$s = 0, 1, 2, \dots, S-1$}
-    \STATE // Vòng ngoài: tính gradient toàn phần tại điểm neo
-    \STATE $\tilde{\mu}_s = \frac{1}{n}\sum_{i=1}^{n} \nabla f_i(\tilde{w}_s)$
-    \STATE $w_0 \leftarrow \tilde{w}_s$
-    \FOR{$t = 0$ \TO $m-1$}
-        \STATE // Vòng trong: cập nhật ngẫu nhiên với gradient hiệu chỉnh
-        \STATE Chọn ngẫu nhiên $i_t \in \{1, \dots, n\}$ theo phân phối đều
-        \STATE $v_t = \nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w}_s) + \tilde{\mu}_s$
-        \STATE $w_{t+1} = w_t - \eta \, v_t$
-    \ENDFOR
-    \STATE // Cập nhật điểm neo cho epoch tiếp theo
-    \STATE $\tilde{w}_{s+1} = w_m$ \COMMENT{có thể thay bằng trung bình hoặc chọn ngẫu nhiên}
-\ENDFOR
-\ENSURE $\tilde{w}_S$ (nghiệm xấp xỉ cuối cùng)
-\end{algorithmic}
 \end{algorithm}
 
-\subsection{Thảo luận trực quan}
-\label{subsec:svrg_discussion}
+\subsubsection{Thảo luận trực quan}
 
-Để hiểu sâu sắc tại sao SVRG hoạt động hiệu quả, ta cần xem xét hai khía cạnh: kỳ vọng và phương sai của ước lượng gradient $v_t^{(s)}$.
+Một điểm ưu việt nổi bật của SVRG khi đặt cạnh SGD cổ điển nằm ở chiến lược thiết lập hệ số bước học $\eta$. Trong môi trường SGD truyền thống, do xung đột nhiễu phương sai cố định, thuật toán bắt buộc phải ép bước học giảm dần về không theo quy luật Robbins-Monro ($\eta_t \to 0$), dẫn đến việc tốc độ trượt tiến về nghiệm bị trì trệ. 
 
-\textbf{Tính không chệch.} Như đã kiểm chứng trong Mục~\ref{sec:svrg_motivation}, với mọi $t$ trong epoch $s$, lấy kỳ vọng theo mẫu $i_t$ (điều kiện trên toàn bộ lịch sử cho tới thời điểm hiện tại), ta có:
-\begin{equation}
-\mathbb{E}_{i_t}[v_t^{(s)}] = \nabla P(w_t^{(s)}).
-\label{eq:svrg_unbiased_inner}
-\end{equation}
-Do đó, ở mỗi bước của vòng trong, hướng di chuyển kỳ vọng vẫn là hướng giảm gradient toàn phần thực sự. Không có sự chệch hướng hệ thống nào được tích lũy.
-
-\textbf{Phương sai suy giảm.} Điểm then chốt làm nên sức mạnh của SVRG nằm ở chỗ phương sai của $v_t^{(s)}$ bị ràng buộc và suy giảm theo tiến trình tối ưu. Cụ thể, ta có thể chứng minh cận trên sau cho phương sai (xem Bổ đề~\ref{lem:varbound} ở phần phân tích hội tụ):
-\begin{equation}
-\mathbb{E}_{i_t} \bigl\| v_t^{(s)} - \nabla P(w_t^{(s)}) \bigr\|^2 \le L^2 \bigl\| w_t^{(s)} - \tilde{w}_s \bigr\|^2.
-\label{eq:svrg_var_decay}
-\end{equation}
-
-Cận trên này cho thấy:
-\begin{itemize}
-    \item Khi $t = 0$ (đầu epoch), $w_0^{(s)} = \tilde{w}_s$ nên khoảng cách bằng 0, phương sai cũng bằng 0 (ước lượng chính là gradient toàn phần). Điều này hợp lý vì bước đầu tiên của epoch thực chất là bước GD với một mẫu duy nhất được chọn ngẫu nhiên – nhưng nhờ có số hạng hiệu chỉnh $-\nabla f_{i_t}(\tilde{w}_s) + \tilde{\mu}_s$, mọi dao động được loại bỏ.
-    \item Trong quá trình vòng trong tiến triển, $w_t^{(s)}$ di chuyển ra xa dần khỏi điểm neo $\tilde{w}_s$. Khoảng cách $\|w_t^{(s)} - \tilde{w}_s\|$ tăng lên, nhưng bị kiểm soát bởi bước học $\eta$ và độ dài epoch $m$. Nếu $m$ không quá lớn, khoảng cách này vẫn đủ nhỏ, và do đó phương sai vẫn bị chặn tốt.
-    \item Quan trọng nhất, qua các epoch, điểm neo $\tilde{w}_s$ ngày càng tiến gần đến nghiệm tối ưu $w^*$. Các điểm $w_t^{(s)}$ trong epoch cũng sẽ dao động quanh vùng lân cận của $\tilde{w}_s$. Do đó, toàn bộ quỹ đạo $\{w_t^{(s)}\}$ và $\tilde{w}_s$ đồng loạt tiến về $w^*$, khiến khoảng cách $\|w_t^{(s)} - \tilde{w}_s\|$ cuối cùng cũng tiến về 0. Kết quả là, \textbf{phương sai của ước lượng gradient triệt tiêu khi thuật toán hội tụ}.
-\end{itemize}
-
-\textbf{So sánh với SGD.} Trong SGD, phương sai $\E\|\nabla f_i(w_t) - \nabla P(w_t)\|^2$ không hề giảm ngay cả khi $w_t \to w^*$, bởi vì các gradient thành phần $\nabla f_i(w^*)$ có thể khác biệt đáng kể. Chính sự hiện diện thường trực của nhiễu này buộc SGD phải dùng bước học giảm dần để “dập tắt” nhiễu, kéo theo tốc độ hội tụ chậm. SVRG, trái lại, chủ động \emph{làm sạch} ước lượng gradient bằng cách khử đi thành phần nhiễu tương quan giữa $w_t$ và $\tilde{w}_s$. Có thể ví von, SGD như một người đi trong sương mù dày đặc không tan; SVRG như người có chiếc la bàn được hiệu chỉnh định kỳ, nên càng đến gần đích thì sương mù càng loãng đi.
-
-\textbf{Vai trò của tham số $m$.} Tham số $m$ (độ dài vòng trong) điều khiển tần suất cập nhật điểm neo. Nếu $m = 1$, mỗi epoch chỉ có một bước SGD hiệu chỉnh, điểm neo được cập nhật sau mỗi bước: chi phí gradient toàn phần mỗi bước là $O(n)$, giống hệt GD và mất đi lợi thế của SGD. Nếu $m$ rất lớn, chi phí gradient toàn phần được khấu hao mỏng, nhưng phương sai có thể tích tụ và làm chậm hội tụ. Lý thuyết (và thực nghiệm) chỉ ra rằng chọn $m = O(\kappa)$ hoặc đơn giản $m = n$ (mỗi epoch dài tương đương một lần duyệt dữ liệu) thường cho kết quả tốt.
-
-Với cấu trúc trên, SVRG thành công trong việc dung hòa: mỗi bước vòng trong chỉ tốn $\mathcal{O}(d)$ như SGD, nhưng phương sai bị khống chế và triệt tiêu dần, cho phép hội tụ tuyến tính với bước học cố định. Phần tiếp theo sẽ chính thức hóa trực quan này bằng một phân tích hội tụ chặt chẽ cho trường hợp hàm mục tiêu lồi mạnh.
+Ngược lại, như Johnson và Zhang \cite{johnson2013accelerating} đã luận giải chi tiết, do SVRG sở hữu cấu trúc hiệu chỉnh tích hợp, năng lượng nhiễu phương sai của vectơ ước lượng $v_t$ sẽ tự động suy giảm tỷ lệ thuận với khoảng cách đến điểm tối ưu. Khi quỹ đạo tham số tiến sát đến $w^*$, đại lượng nhiễu tự triệt tiêu về mức không, loại bỏ hoàn toàn nguy cơ xảy ra hiện tượng văng hạt hoặc phân kỳ. Nhờ đặc tính tự ổn định này, SVRG cho phép người dùng duy trì một hệ số bước học $\eta$ ở mức hằng số cố định (constant step size) xuyên suốt toàn bộ quá trình thực thi. Việc giữ nguyên sải bước lớn giúp thuật toán liên tục bứt tốc mà không gặp hiện tượng suy giảm động năng, đây chính là chìa khóa then chốt đưa giải thuật đạt tới tốc độ hội tụ tuyến tính.
 
 \section{Phân tích hội tụ cho hàm lồi mạnh}
-\label{sec:svrg_convergence}
 
-Trong mục này, chúng tôi trình bày phân tích hội tụ của SVRG cho lớp bài toán \textbf{tối thiểu hóa tổng hữu hạn} với hàm mục tiêu \textbf{lồi mạnh} (strongly convex). Kết quả trung tâm là thuật toán đạt được tốc độ hội tụ tuyến tính, với tổng số lần đánh giá gradient thành phần vượt trội so với GD truyền thống khi $n$ lớn.
+Để khẳng định tính ưu việt của SVRG trên phương diện lý thuyết toán học, phần này thiết lập các bước chứng minh và phân tích điều kiện hội tụ của thuật toán đối với lớp hàm mục tiêu lồi mạnh và trơn Lipschitz.
 
 \subsection{Giả thiết và ký hiệu}
 
-Như đã thiết lập trong Chương 2, ta xét bài toán
-\begin{equation}
-\min_{w\in\mathbb{R}^d} P(w) = \frac{1}{n}\sum_{i=1}^{n} f_i(w),
-\end{equation}
-với các giả thiết sau:
-\begin{assumption}[Các giả thiết cơ bản]
-\label{ass:basic}
-\begin{enumerate}
-    \item \textbf{Lồi mạnh:} Hàm mục tiêu $P$ là $\mu$‑lồi mạnh với hệ số $\mu > 0$, tức thỏa mãn \eqref{eq:strong_convex}.
-    \item \textbf{Độ trơn:} Mỗi hàm thành phần $f_i$ là $L$‑trơn (gradient liên tục Lipschitz) với hằng số $L > 0$, tức $\|\nabla f_i(x)-\nabla f_i(y)\| \le L \|x-y\|$ với mọi $x,y$.
-    \item \textbf{Miền giá trị:} Tất cả $f_i$ đều là các hàm lồi (thực ra tính lồi của từng $f_i$ là hệ quả nếu ta giả sử chúng lồi, nhưng trong nhiều phân tích, chỉ cần $P$ lồi mạnh và $f_i$ trơn là đủ; tuy nhiên để thuận tiện, ta giả sử mỗi $f_i$ lồi).
-\end{enumerate}
-\end{assumption}
-
-Ký hiệu $w^*$ là nghiệm tối ưu toàn cục duy nhất của $P$. Xét một epoch $s$ bất kỳ, điểm neo là $\tilde{w} = \tilde{w}_s$, gradient toàn phần tương ứng $\tilde{\mu} = \nabla P(\tilde{w})$. Vòng trong xuất phát từ $w_0 = \tilde{w}$, và với $t=0,1,\dots,m-1$, ta cập nhật $w_{t+1} = w_t - \eta\, v_t$ với
-\begin{equation}
-v_t = \nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w}) + \tilde{\mu}.
-\label{eq:svrg_v_analysis}
-\end{equation}
-Ở đây $i_t$ được chọn ngẫu nhiên độc lập (có điều kiện) theo phân phối đều. Để đơn giản hóa chứng minh, ta sẽ xét phương án chọn điểm neo cho epoch tiếp theo là một điểm ngẫu nhiên trong số các điểm lặp của epoch hiện tại, cụ thể $\tilde{w}_{s+1} = w_t$ với $t$ được chọn ngẫu nhiên theo phân phối đều trên $\{0,\dots,m-1\}$. Đây là kỹ thuật thường dùng trong bài báo gốc để thuận tiện cho việc tính kỳ vọng toàn epoch. Kết quả cũng áp dụng tương tự (với hằng số khác biệt không đáng kể) cho các cách chọn khác.
+Xuyên suốt quá trình phân tích kỹ thuật, cấu trúc hình học của hàm mục tiêu $P(w)$ được định hình dựa trên hai giả thiết toán học kinh điển sau từ Johnson và Zhang \cite{johnson2013accelerating}:
+\begin{itemize}
+    \item \textbf{Giả thiết 1 (Tính trơn Lipschitz - Smoothness):} Mỗi hàm thành phần $\psi_i(w)$ đều khả vi liên tục và có gradient thỏa mãn điều kiện Lipschitz với hằng số $L > 0$, tức là với mọi $u, v \in \mathbb{R}^d$:
+    \begin{equation}\label{eq:smooth_assumption}
+    \|\nabla \psi_i(u) - \nabla \psi_i(v)\| \le L \|u - v\|
+    \end{equation}
+    \item \textbf{Giả thiết 2 (Tính lồi mạnh - Strong Convexity):} Hàm mục tiêu tổng thể $P(w)$ lồi mạnh với hằng số $\gamma > 0$, nghĩa là với mọi $u, v \in \mathbb{R}^d$:
+    \begin{equation}\label{eq:strong_convex_assumption}
+    P(u) \ge P(v) + \langle \nabla P(v), u - v \rangle + \frac{\gamma}{2}\|u - v\|^2
+    \end{equation}
+\end{itemize}
 
 \subsection{Bổ đề phương sai bị chặn}
-\label{subsec:varbound}
 
-Trước tiên, ta cần một ước lượng cho phương sai của $v_t$ – đây là nền tảng để chứng minh sự co rút sai số.
+Bước đi mang tính quyết định trong toàn bộ cấu trúc chứng minh định lý hội tụ của SVRG là việc thiết lập một chặn trên cho bình phương chuẩn của vectơ gradient hiệu chỉnh $v_t$. Bổ đề này định lượng hóa một cách trực quan cách thức kỹ thuật VR kiểm soát năng lượng nhiễu của toán tử xấp xỉ ngẫu nhiên.
 
-\begin{lemma}[Phương sai bị chặn]
-\label{lem:varbound}
-Với $v_t$ xác định như \eqref{eq:svrg_v_analysis}, kỳ vọng có điều kiện trên toàn bộ quá khứ (bao gồm $\tilde{w}$ và $w_t$) thỏa mãn:
-\begin{align}
-\mathbb{E}_{i_t}\bigl\| v_t - \nabla P(w_t) \bigr\|^2 
-&\le 2L\bigl[P(w_t) - P(w^*)\bigr] + 2L\bigl[P(\tilde{w}) - P(w^*)\bigr] \nonumber\\
-&\quad - 2\mu \|\nabla P(w_t)\|^2.
-\label{eq:varbound_final}
-\end{align}
+\begin{lemma}\label{lem:variance_bound}
+Dưới các giả thiết (\ref{eq:smooth_assumption}) và (\ref{eq:strong_convex_assumption}), xét điểm chụp $\tilde{w}$ và trạng thái tham số hiện tại $w_{t-1}$. Kỳ vọng điều kiện của bình phương chuẩn vectơ ước lượng $v_t$ thỏa mãn bất đẳng thức chặn dưới đây:
+\begin{equation}\label{eq:variance_lemma_bound}
+\mathbb{E}_{i_t} \left[ \|v_t\|^2 \right] \le 2L \left[ P(w_{t-1}) - P(w^*) + P(\tilde{w}) - P(w^*) \right]
+\end{equation}
 \end{lemma}
 
-\begin{proof}[Chứng minh]
-Ta bắt đầu bằng cách viết:
+\begin{proof}
+Theo công thức toán tử ước lượng, ta khai triển bình phương chuẩn dựa trên tính chất $\mathbb{E}\|X - \mathbb{E}X + \mathbb{E}X\|^2 = \mathbb{E}\|X - \mathbb{E}X\|^2 + \|\mathbb{E}X\|^2 \le \mathbb{E}\|X\|^2$:
+\begin{align}
+\mathbb{E}_{i_t} \left[ \|v_t\|^2 \right] &= \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \nabla P(\tilde{w})\|^2 \right] \\
+&\le 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(w^*)\|^2 \right] + 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(\tilde{w}) - \nabla \psi_{i_t}(w^*) - \nabla P(\tilde{w})\|^2 \right] \nonumber \\
+&\le 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(w^*)\|^2 \right] + 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(\tilde{w}) - \nabla \psi_{i_t}(w^*)\|^2 \right]
+\end{align}
+Áp dụng một tính chất chuẩn mực của lớp hàm trơn Lipschitz có cực tiểu tại $w^*$, ta luôn có bất đẳng thức $\frac{1}{n}\sum_{i=1}^n \|\nabla \psi_i(w) - \nabla \psi_i(w^*)\|^2 \le 2L(P(w) - P(w^*))$. Thay thế tính chất này vào hai số hạng kỳ vọng trên, ta trực tiếp thu được kết quả của bổ đề:
 \begin{equation}
-v_t - \nabla P(w_t) = \bigl(\nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w})\bigr) - \bigl(\nabla P(w_t) - \nabla P(\tilde{w})\bigr).
+\mathbb{E}_{i_t} \left[ \|v_t\|^2 \right] \le 2L \left[ P(w_{t-1}) - P(w^*) \right] + 2L \left[ P(\tilde{w}) - P(w^*) \right]
 \end{equation}
-Do đó,
-\begin{align}
-\|v_t - \nabla P(w_t)\|^2 &= \|\nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w})\|^2 + \|\nabla P(w_t) - \nabla P(\tilde{w})\|^2 \nonumber\\
-&\quad - 2\langle \nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w}), \nabla P(w_t) - \nabla P(\tilde{w})\rangle.
-\end{align}
-Lấy kỳ vọng theo $i_t$, số hạng chéo trở thành $-2 \|\nabla P(w_t) - \nabla P(\tilde{w})\|^2$, do $\mathbb{E}[\nabla f_{i_t}(x)] = \nabla P(x)$. Vậy
-\begin{align}
-\mathbb{E}_{i_t}\|v_t - \nabla P(w_t)\|^2 
-&= \mathbb{E}_{i_t}\|\nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w})\|^2 - \|\nabla P(w_t) - \nabla P(\tilde{w})\|^2 \nonumber\\
-&\le \mathbb{E}_{i_t}\|\nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w})\|^2.
-\end{align}
-(Theo bất đẳng thức $\mathbb{E}\|X - \mathbb{E}X\|^2 = \mathbb{E}\|X\|^2 - \|\mathbb{E}X\|^2 \le \mathbb{E}\|X\|^2$.)
-
-Sử dụng tính $L$‑trơn của mỗi $f_i$, ta có $\|\nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w})\|^2 \le L^2 \|w_t - \tilde{w}\|^2$, nhưng ta cần một cận tốt hơn, liên quan đến giá trị hàm. Một kỹ thuật chuẩn là dùng bất đẳng thức đồng khả vi cho các hàm lồi $L$‑trơn: với mọi $x,y$,
-\begin{equation}
-\|\nabla f_i(x) - \nabla f_i(y)\|^2 \le 2L \bigl(f_i(x) - f_i(y) - \langle \nabla f_i(y), x-y\rangle\bigr).
-\end{equation}
-(Xem, ví dụ, Bổ đề 3.4 trong \cite{bubeck2015convex}.) Cộng tất cả $i$ và chia cho $n$, ta thu được
-\begin{align}
-\mathbb{E}_{i_t}\|\nabla f_{i_t}(x) - \nabla f_{i_t}(y)\|^2 
-&\le 2L \Bigl(P(x) - P(y) - \langle \nabla P(y), x-y\rangle\Bigr).
-\end{align}
-Áp dụng với $x = w_t$, $y = \tilde{w}$:
-\begin{align}
-\mathbb{E}_{i_t}\|\nabla f_{i_t}(w_t) - \nabla f_{i_t}(\tilde{w})\|^2 
-&\le 2L \Bigl(P(w_t) - P(\tilde{w}) - \langle \nabla P(\tilde{w}), w_t-\tilde{w}\rangle\Bigr).
-\end{align}
-Bây giờ ta cần biến đổi để xuất hiện $\|\nabla P(w_t)\|^2$ và các đại lượng tới $w^*$. Để ý rằng $P$ là $\mu$‑lồi mạnh, do đó
-\begin{equation}
-P(y) \ge P(x) + \langle \nabla P(x), y-x\rangle + \frac{\mu}{2}\|y-x\|^2,
-\end{equation}
-và cũng có
-\begin{equation}
-\|\nabla P(w_t)\|^2 \ge 2\mu \bigl(P(w_t) - P(w^*)\bigr).
-\end{equation}
-Thay $y = \tilde{w}$, $x = w^*$, ta có
-\begin{align}
-P(\tilde{w}) &\ge P(w^*) + \langle \nabla P(w^*), \tilde{w}-w^*\rangle + \frac{\mu}{2}\|\tilde{w}-w^*\|^2 = P(w^*) + \frac{\mu}{2}\|\tilde{w}-w^*\|^2.
-\end{align}
-Mặt khác, từ bất đẳng thức $L$‑trơn cho $P$:
-\begin{equation}
-P(w_t) \le P(\tilde{w}) + \langle \nabla P(\tilde{w}), w_t-\tilde{w}\rangle + \frac{L}{2}\|w_t-\tilde{w}\|^2.
-\end{equation}
-Kết hợp khéo léo, ta có thể chứng minh (xem \cite{johnson2013accelerating} Lemma 3.1) rằng
-\begin{align}
-\mathbb{E}_{i_t}\|v_t - \nabla P(w_t)\|^2 
-&\le 4L \bigl[P(w_t) - P(w^*) + P(\tilde{w}) - P(w^*)\bigr],
-\end{align}
-và với các cải tiến về hằng số, \cite{zhang2016variance} đã đưa ra cận sắc hơn như trong \eqref{eq:varbound_final}. Ta sẽ sử dụng dạng này vì nó thể hiện rõ sự triệt tiêu qua $\|\nabla P(w_t)\|^2$, có lợi cho việc chứng minh hội tụ.
-
-Cụ thể, bằng cách thêm bớt các số hạng, ta thu được:
-\begin{align}
-\mathbb{E}_{i_t}\|v_t - \nabla P(w_t)\|^2 
-&\le 2L \bigl[P(w_t) - P(w^*) \bigr] + 2L \bigl[P(\tilde{w}) - P(w^*) \bigr] \nonumber\\
-&\quad - 2\mu \|\nabla P(w_t)\|^2.
-\end{align}
-Để có được dạng này, ta sử dụng tính $\mu$‑lồi mạnh: $P(w^*) \ge P(x) - \frac{1}{2\mu}\|\nabla P(x)\|^2$ (từ bất đẳng thức Fenchel–Young cho cặp liên hợp), và biến đổi đại số.
+Bất đẳng thức (\ref{eq:variance_lemma_bound}) đã chứng minh một cách tường minh luận điểm lý thuyết: khi cả hai đại lượng $w_{t-1}$ và $\tilde{w}$ đồng thời tiệm cận về nghiệm $w^*$, vế phải của bất đẳng thức tự động triệt tiêu về mức không, kéo theo bình phương trung bình của hướng trượt tiến sát về giá trị gradient chính xác của hệ thống, loại bỏ hoàn toàn sai số bình phương trung bình (MSE) như Driggs và các cộng sự \cite{driggs2022accelerating} đã đúc kết.
 \end{proof}
 
-Nhận xét: Khi $w_t$ và $\tilde{w}$ đều gần $w^*$, các số hạng $P(w_t)-P(w^*)$ và $P(\tilde{w})-P(w^*)$ trở nên nhỏ, kéo theo phương sai tiến về 0. Thêm vào đó, số hạng $- 2\mu \|\nabla P(w_t)\|^2$ giúp tăng cường sự co rút.
-
 \subsection{Định lý hội tụ tuyến tính}
-\label{subsec:linearconvergence}
 
-Bây giờ ta sẽ phân tích một epoch của SVRG và chứng minh rằng kỳ vọng sai số giảm đi một hệ số không đổi sau mỗi epoch.
+Dựa trên nền tảng của Bổ đề \ref{lem:variance_bound}, Johnson và Zhang \cite{johnson2013accelerating} đã thiết lập Định lý mang tính nền móng chứng minh tốc độ hội tụ của SVRG cho lớp hàm lồi mạnh.
 
-\begin{theorem}[Hội tụ tuyến tính của SVRG]
-\label{theorem:svrg_linear}
-Với các giả thiết trong Assumption \ref{ass:basic}, xét thuật toán SVRG với điểm neo mới được chọn ngẫu nhiên trong epoch ($\tilde{w}_{s+1} = w_t$ với $t$ được chọn đều trong $\{0,\dots,m-1\}$). Khi đó, tồn tại các tham số $\eta > 0$ và $m \in \mathbb{N}$ sao cho
+\begin{theorem}[Johnson \& Zhang, 2013]\label{theo:svrg_linear}
+Giả sử các điều kiện (\ref{eq:smooth_assumption}) và (\ref{eq:strong_convex_assumption}) được thỏa mãn. Nếu đầu ra của chu kỳ $s$ được lựa chọn ngẫu nhiên theo Lựa chọn 3 trong Sơ đồ giải thuật, ta có bất đẳng thức hội tụ tổng quát:
 \begin{equation}
-\mathbb{E}\bigl[P(\tilde{w}_{s+1}) - P(w^*)\bigr] \le \rho \;\mathbb{E}\bigl[P(\tilde{w}_s) - P(w^*)\bigr],
-\label{eq:svrg_contraction}
+\mathbb{E} \left[ P(\tilde{w}_s) - P(w^*) \right] \le \alpha \cdot \mathbb{E} \left[ P(\tilde{w}_{s-1}) - P(w^*) \right]
 \end{equation}
-với $\rho < 1$. Cụ thể, chọn $\eta = 1/(10 L \kappa)$ và $m = \lceil 100 \kappa \rceil$ (với $\kappa = L/\mu$), ta có $\rho \le 5/6$. Hệ quả là sau $S$ epoch,
-\begin{equation}
-\mathbb{E}\bigl[P(\tilde{w}_S) - P(w^*)\bigr] \le \rho^S \bigl(P(\tilde{w}_0) - P(w^*)\bigr).
-\end{equation}
-Tổng số lần đánh giá gradient thành phần để đạt sai số $\epsilon$ là
-\begin{equation}
-\mathcal{O}\!\left( (n + \kappa) \log\frac{1}{\epsilon} \right).
+Trong đó, hệ số co hình học $\alpha$ được xác định cụ thể thông qua biểu thức định lượng:
+\begin{equation}\label{eq:alpha_co}
+\alpha = \frac{1}{\gamma m \eta (1 - 2L\eta)} + \frac{2L\eta}{1 - 2L\eta}
 \end{equation}
 \end{theorem}
 
-\begin{proof}[Phác thảo chứng minh]
-Giả sử ta đang ở epoch $s$, điểm neo $\tilde{w}$. Ký hiệu $\Delta_s = \mathbb{E}[P(\tilde{w}_s) - P(w^*)]$. Mục tiêu là chứng minh $\Delta_{s+1} \le \rho \Delta_s$.
+Để thuật toán đảm bảo tính hội tụ tuyến tính, tham số bước học $\eta$ và độ dài chu kỳ $m$ bắt buộc phải được thiết lập sao cho hệ số co thỏa mãn điều kiện ngặt: $\alpha < 1$. Phân tích biểu thức (\ref{eq:alpha_co}) cho thấy, ta cần chọn $\eta$ đủ nhỏ để thành phần thứ hai $\frac{2L\eta}{1 - 2L\eta}$ không vượt quá ngưỡng hằng số, cụ thể là $\eta < \frac{1}{4L}$. Đồng thời, độ dài vòng lặp trong $m$ phải được cấu hình đủ lớn nhằm đẩy giá trị của số hạng thứ nhất tiến về không. Khi hai điều kiện này được đáp ứng, $\alpha$ trở thành một hằng số co nghiêm ngặt độc lập với thời gian, chứng minh rằng sai số tối ưu của SVRG giảm theo cấp số mũ qua từng chu kỳ.
 
-\textbf{Bước 1: Phân tích một bước trong vòng lặp.}  
-Với mỗi $t \in \{0,\dots,m-1\}$, từ cập nhật $w_{t+1} = w_t - \eta v_t$, sử dụng tính $L$‑trơn của $P$ và lấy kỳ vọng có điều kiện, ta có:
-\begin{align}
-\mathbb{E}_{i_t}[P(w_{t+1})] &\le P(w_t) - \eta \langle \nabla P(w_t), \mathbb{E}_{i_t}[v_t]\rangle + \frac{L\eta^2}{2} \mathbb{E}_{i_t}\|v_t\|^2 \nonumber\\
-&= P(w_t) - \eta \|\nabla P(w_t)\|^2 + \frac{L\eta^2}{2} \Bigl( \| \nabla P(w_t)\|^2 + \mathbb{E}_{i_t}\|v_t - \nabla P(w_t)\|^2 \Bigr),
-\end{align}
-vì $\mathbb{E}[v_t] = \nabla P(w_t)$ và $\mathbb{E}\|v_t\|^2 = \|\mathbb{E}v_t\|^2 + \mathbb{E}\|v_t - \mathbb{E}v_t\|^2$.
-Sắp xếp lại:
-\begin{align}
-\mathbb{E}_{i_t}[P(w_{t+1})] &\le P(w_t) - \eta\left(1 - \frac{L\eta}{2}\right)\|\nabla P(w_t)\|^2 + \frac{L\eta^2}{2} \mathbb{E}_{i_t}\|v_t - \nabla P(w_t)\|^2.
-\label{eq:step_ineq}
-\end{align}
+\subsection{So sánh độ phức tạp toán học}
 
-\textbf{Bước 2: Thay cận phương sai từ Bổ đề \ref{lem:varbound}.}  
-Gọi $\sigma_t^2$ là giới hạn trên của phương sai trong bổ đề. Giả sử ta chọn $\eta$ đủ nhỏ để $L\eta \le 1/2$, khi đó $1 - L\eta/2 \ge 3/4 > 0$. Chèn $\sigma_t^2$ vào, ta được:
-\begin{align}
-\mathbb{E}_{i_t}[P(w_{t+1})] &\le P(w_t) - \frac{3\eta}{4} \|\nabla P(w_t)\|^2 + \frac{L\eta^2}{2} \Bigl( 2L[P(w_t)-P(w^*)] \nonumber\\
-&\quad + 2L[P(\tilde{w})-P(w^*)] - 2\mu\|\nabla P(w_t)\|^2 \Bigr) \nonumber\\
-&= P(w_t) - \eta\left(\frac{3}{4} - L\eta \mu\right)\|\nabla P(w_t)\|^2 \nonumber\\
-&\quad + L^2\eta^2 \bigl(P(w_t)-P(w^*)\bigr) + L^2\eta^2 \bigl(P(\tilde{w})-P(w^*)\bigr).
-\end{align}
-Với $\eta \le 1/(4L\kappa)$, ta có $L\eta \mu = \eta L \mu \le 1/4$, nên $\frac{3}{4} - L\eta\mu \ge 1/2$. Do đó:
-\begin{align}
-\mathbb{E}_{i_t}[P(w_{t+1})] &\le P(w_t) - \frac{\eta}{2}\|\nabla P(w_t)\|^2 + L^2\eta^2 \bigl(P(w_t)-P(w^*)\bigr) \nonumber\\
-&\quad + L^2\eta^2 \bigl(P(\tilde{w})-P(w^*)\bigr).
-\label{eq:after_var}
-\end{align}
+Để làm nổi bật vị thế của SVRG, việc thực hiện một phân tích so sánh định lượng về tổng chi phí tính toán (Computational Complexity) để đạt được sai số $\epsilon$ giữa ba đại diện tiêu biểu là điều cực kỳ cần thiết. Từ hệ quả của Định lý \ref{theo:svrg_linear}, Johnson và Zhang \cite{johnson2013accelerating} đã tổng kết bài toán so sánh dựa trên các thông số đặc trưng:
 
-\textbf{Bước 3: Dùng tính $\mu$‑lồi mạnh để thay $\|\nabla P(w_t)\|^2$.}  
-Từ bất đẳng thức $\|\nabla P(w_t)\|^2 \ge 2\mu (P(w_t)-P(w^*))$, ta có:
-\begin{align}
-\mathbb{E}_{i_t}[P(w_{t+1})] &\le P(w_t) - \eta\mu \bigl(P(w_t)-P(w^*)\bigr) + L^2\eta^2 \bigl(P(w_t)-P(w^*)\bigr) \nonumber\\
-&\quad + L^2\eta^2 \bigl(P(\tilde{w})-P(w^*)\bigr) \nonumber\\
-&= P(w_t) - \eta\mu \left(1 - \frac{L^2\eta}{\mu}\right) \bigl(P(w_t)-P(w^*)\bigr) \nonumber\\
-&\quad + L^2\eta^2 \bigl(P(\tilde{w})-P(w^*)\bigr).
-\end{align}
-Chọn $\eta = \frac{\mu}{10 L^2}$ hoặc tổng quát rất nhỏ, ta có thể đảm bảo $1 - \frac{L^2\eta}{\mu} \ge \frac{1}{2}$. Và $L^2\eta^2 = \frac{1}{100}\frac{\mu^2}{L^2}$? Tốt hơn, ta sử dụng tham số hóa qua $\kappa$. Đặt $\eta = \frac{1}{10 L \kappa} = \frac{\mu}{10 L^2}$? Không, $\kappa = L/\mu$, vậy $\frac{1}{10 L \kappa} = \frac{1}{10 L (L/\mu)} = \frac{\mu}{10 L^2}$. Đúng vậy. Khi đó $L^2\eta^2 = L^2 \cdot \frac{\mu^2}{100 L^4} = \frac{\mu^2}{100 L^2} = \frac{\mu}{100 \kappa^2} \cdot \frac{1}{\mu}$... Ta cần so với $\eta\mu$. Tính toán:
-\[
-\eta\mu = \frac{\mu^2}{10 L^2} = \frac{\mu}{10 \kappa^2}.
-\]
-Hệ số của $P(w_t)-P(w^*)$ trở thành $-\eta\mu(1 - \frac{L^2\eta}{\mu}) = -\frac{\mu^2}{10 L^2}\left(1 - \frac{L^2}{\mu}\cdot \frac{\mu}{10 L^2}\right) = -\frac{\mu^2}{10 L^2}(1 - 1/10) = -\frac{9\mu^2}{100 L^2}$. Còn $L^2\eta^2 = \frac{\mu^2}{100 L^2}$. Như vậy:
-\begin{align}
-\mathbb{E}_{i_t}[P(w_{t+1})] &\le P(w_t) - \frac{9\mu^2}{100 L^2} [P(w_t)-P(w^*)] + \frac{\mu^2}{100 L^2} [P(\tilde{w})-P(w^*)].
-\end{align}
-Cộng thêm $P(w^*) - P(w^*)$ một cách chiến lược, ta viết lại thành:
-\begin{align}
-\mathbb{E}_{i_t}[P(w_{t+1}) - P(w^*)] &\le \left(1 - \frac{9\mu^2}{100 L^2}\right) [P(w_t)-P(w^*)] + \frac{\mu^2}{100 L^2} [P(\tilde{w})-P(w^*)].
-\end{align}
-Lấy kỳ vọng toàn bộ (trên tất cả lịch sử) và đặt $a_t = \mathbb{E}[P(w_t) - P(w^*)]$, $b = \mathbb{E}[P(\tilde{w}) - P(w^*)]$, ta có lược đồ:
-\begin{equation}
-a_{t+1} \le \left(1 - \frac{9\mu^2}{100 L^2}\right) a_t + \frac{\mu^2}{100 L^2} b.
-\label{eq:recur}
-\end{equation}
-Đây là một bất đẳng thức đệ quy tuyến tính. Áp dụng từ $t=0$ đến $m-1$, với điều kiện đầu $a_0 = b$ (vì $w_0 = \tilde{w}$). Ta có:
-\begin{align}
-a_1 &\le \left(1 - \frac{9\mu^2}{100 L^2}\right) b + \frac{\mu^2}{100 L^2} b = \left(1 - \frac{8\mu^2}{100 L^2}\right) b,\\
-a_2 &\le \left(1 - \frac{9\mu^2}{100 L^2}\right) a_1 + \frac{\mu^2}{100 L^2} b \le \dots
-\end{align}
-Bằng quy nạp, ta thu được $a_m \le \rho\, b$ với $\rho = 1 - \frac{\mu^2}{10 L^2} = 1 - \frac{1}{10 \kappa^2}$ (khi chọn hằng số phù hợp). Trong thực tế, có thể điều chỉnh hằng số để có $\rho \le 1 - \frac{1}{c \kappa}$ sau một epoch dài $m = O(\kappa)$. Ở đây, với $\eta = 1/(10L\kappa)$ và $m = 100\kappa$, ta đảm bảo $\rho \le 5/6$.
+% \begin{table}[H]
+% \centering
+% \caption{So sánh tổng chi phí tính toán để đạt độ chính xác $\epsilon$}
+% \label{tab:complexity_compare}
+% \begin{tabular}{lccc}
+% \hline
+% \textbf{Thuật toán} & \textbf{Chi phí một bước lặp} & \textbf{Số bước lặp cần thiết} & \textbf{Tổng chi phí tính toán} \\ \hline
+% \textbf{GD}   & $\mathcal{O}(n)$ & $\mathcal{O}\left(\frac{L}{\gamma}\log(1/\epsilon)\right)$ & $\mathcal{O}\left(n \cdot \frac{L}{\gamma}\log(1/\epsilon)\right)$ \\
+% \textbf{SGD}  & $\mathcal{O}(1)$ & $\mathcal{O}\left(\frac{L}{\gamma}\cdot\frac{1}{\epsilon}\right)$ & $\mathcal{O}\left(\frac{L}{\gamma}\cdot\frac{1}{\epsilon}\right)$ \\
+% \textbf{SVRG} & $\mathcal{O}(1) \text{ (amortis)}$ & $\mathcal{O}\left(\left(n + \frac{L}{\gamma}\right)\log(1/\epsilon)\right)$ & $\mathcal{O}\left(\left(n + \frac{L}{\gamma}\right)\log(1/\epsilon)\right)$ \\ \hline
+% \end{tabular}
+% \end{table}
 
-\textbf{Bước 4: Chọn điểm neo mới.} Theo giả thiết, $\tilde{w}_{s+1}$ được chọn ngẫu nhiên từ $\{w_0,\dots,w_{m-1}\}$. Do đó,
-\begin{equation}
-\mathbb{E}[P(\tilde{w}_{s+1}) - P(w^*)] = \frac{1}{m}\sum_{t=0}^{m-1} a_t.
-\end{equation}
-Nhờ tính chất giảm dần của dãy $a_t$, nếu $a_0 = b$ và $a_m \le \rho b$, thì trung bình của dãy cũng bị chặn bởi một hệ số nhỏ hơn $1$. Cụ thể, với lựa chọn tham số thích hợp, ta có $\mathbb{E}[P(\tilde{w}_{s+1}) - P(w^*)] \le \rho'\, b$ với $\rho' < 1$. Điều này hoàn tất phép chứng minh co rút qua từng epoch.
-
-\textbf{Bước 5: Độ phức tạp gradient.} Mỗi epoch cần $n$ gradient thành phần cho $\tilde{\mu}_s$ và $m$ gradient cho vòng trong, tổng cộng $n + m$ gradient thành phần. Số epoch cần thiết để đạt $\epsilon$ là $O(\log(1/\epsilon) / \log(1/\rho)) = O(\kappa \log(1/\epsilon))$ (vì $\rho = 1 - \Theta(1/\kappa)$). Do đó tổng số gradient thành phần là
-\begin{equation}
-S \cdot (n+m) = O\bigl( (n + \kappa) \kappa \log(1/\epsilon) \bigr)?
-\end{equation}
-Nhưng ta cần $m = O(\kappa)$, nên số epoch $O(\kappa \log(1/\epsilon))$ nhân với $(n+m)$ cho $O((n+\kappa)\kappa \log(1/\epsilon))$, điều này tệ hơn GD. Rõ ràng cần chọn $m$ lớn hơn $\kappa$ để số epoch giảm. Thực tế, phân tích tinh chỉnh cho thấy với $m = \Theta(\kappa)$, hệ số co $\rho$ không đổi (ví dụ $3/4$), và do đó số epoch chỉ cần $O(\log(1/\epsilon))$. Khi đó tổng gradient là $O((n + \kappa)\log(1/\epsilon))$. Đây là kết quả quan trọng: hội tụ tuyến tính với hằng số $\rho$ \emph{không} phụ thuộc vào $\kappa$ nếu $m$ đủ lớn. Để đạt được điều đó, ta cần chọn $m = \Theta(\kappa)$ trong mỗi epoch. Với $m = 100\kappa$ như trên, sau một epoch, $a_m \le (5/6) b$, do đó số epoch cần là $O(\log(1/\epsilon))$, và tổng gradient là $(n + 100\kappa) \times \#epoch = O((n+\kappa)\log(1/\epsilon))$.
-\end{proof}
-
-\subsection{So sánh độ phức tạp}
-Ta tổng kết độ phức tạp (số lần đánh giá gradient thành phần) để đạt sai số $\epsilon$ trong Bảng~\ref{tab:complex}.
-
-\begin{table}[htbp]
+\begin{table}[H]
 \centering
-\caption{So sánh độ phức tạp gradient cho bài toán lồi mạnh}
-\label{tab:complex}
-\begin{tabular}{|l|c|}
-\hline
-Thuật toán & Độ phức tạp (gradient thành phần) \\ \hline
-GD & $\mathcal{O}\!\left( n \kappa \log\frac{1}{\epsilon} \right)$ \\
-SGD & $\mathcal{O}\!\left( \frac{1}{\epsilon} \right)$ (dưới tuyến tính) \\
-SAG/SAGA & $\mathcal{O}\!\left( (n + \kappa) \log\frac{1}{\epsilon} \right)$ \\
-SVRG & $\mathcal{O}\!\left( (n + \kappa) \log\frac{1}{\epsilon} \right)$ \\ \hline
-\end{tabular}
+\caption{So sánh tổng chi phí tính toán để đạt độ chính xác $\epsilon$}
+\label{tab:complexity_compare}
+\small % Giảm size chữ một chút để bảng thanh thoát hơn
+\begin{tabularx}{\textwidth}{l c c X}
+\toprule
+\textbf{Thuật toán} & \textbf{Chi phí 1 bước lặp} & \textbf{Số bước lặp cần thiết} & \textbf{Tổng chi phí tính toán} \\ 
+\midrule
+\textbf{GD}  & $\mathcal{O}(n)$ & $\mathcal{O}\left(\frac{L}{\gamma}\log(1/\epsilon)\right)$ & $\mathcal{O}\left(n \cdot \frac{L}{\gamma}\log(1/\epsilon)\right)$ \\ \addlinespace
+\textbf{SGD} & $\mathcal{O}(1)$ & $\mathcal{O}\left(\frac{L}{\gamma}\cdot\frac{1}{\epsilon}\right)$ & $\mathcal{O}\left(\frac{L}{\gamma}\cdot\frac{1}{\epsilon}\right)$ \\ \addlinespace
+\textbf{SVRG}& $\mathcal{O}(1)$ (amortis) & $\mathcal{O}\left(\left(n + \frac{L}{\gamma}\right)\log(1/\epsilon)\right)$ & $\mathcal{O}\left(\left(n + \frac{L}{\gamma}\right)\log(1/\epsilon)\right) + \frac{L}{\gamma}\log(1/\epsilon)$ \\ 
+\bottomrule
+\end{tabularx}
 \end{table}
 
-Như vậy, SVRG cải thiện đáng kể so với GD khi $n$ lớn, đưa hệ số phụ thuộc $n$ từ $n\kappa$ xuống còn $n+\kappa$. Đồng thời, nó khắc phục được tính hội tụ dưới tuyến tính của SGD cổ điển, đem lại sự hội tụ tuyến tính ổn định mà không đòi hỏi bộ nhớ lớn như SAG hay SAGA.
-
-
-\section{Các biến thể quan trọng}
-\label{sec:svrg_variants}
-
-Thuật toán SVRG gốc được thiết kế cho bài toán tổng hữu hạn với các hàm thành phần trơn và hàm mục tiêu lồi mạnh. Từ nền tảng đó, nhiều biến thể đã ra đời nhằm mở rộng phạm vi áp dụng và cải thiện hiệu năng trong các bối cảnh khác nhau. Trong mục này, chúng tôi điểm qua ba biến thể tiêu biểu: SVRG với mini‑batch (tận dụng tính toán song song), Proximal SVRG (xử lý thành phần phạt không trơn), và SVRG cho bài toán lồi tổng quát không nhất thiết lồi mạnh.
-
-\subsection{SVRG với mini‑batch}
-\label{subsec:minibatch_svrg}
-
-Trong dạng cơ bản, mỗi bước của SVRG chỉ sử dụng gradient của một mẫu duy nhất. Điều này làm cho thuật toán khó tận dụng được sức mạnh của các kiến trúc tính toán song song (multi‑core CPU, GPU, cụm máy). Mở rộng tự nhiên là thay thế mẫu đơn lẻ bằng một \textbf{mini‑batch} gồm $b$ mẫu được chọn ngẫu nhiên không hoàn lại từ tập huấn luyện. Cụ thể, ký hiệu $B_t \subset \{1,\dots,n\}$ là một tập con kích thước $b$, được lấy mẫu đều (mỗi tập con có xác suất như nhau). Ước lượng gradient hiệu chỉnh cho mini‑batch trở thành:
-\begin{equation}
-v_t = \frac{1}{b}\sum_{i \in B_t} \Bigl( \nabla f_i(w_t) - \nabla f_i(\tilde{w}) \Bigr) + \nabla P(\tilde{w}).
-\label{eq:minibatch_v}
-\end{equation}
-Dễ dàng kiểm tra rằng $\mathbb{E}_{B_t}[v_t] = \nabla P(w_t)$, tức ước lượng vẫn không chệch. Quan trọng hơn, phương sai của $v_t$ giờ đây được hưởng lọi từ kích thước batch. Có thể chứng minh rằng
-\begin{equation}
-\mathbb{E}_{B_t}\bigl\| v_t - \nabla P(w_t) \bigr\|^2 \le \frac{L^2}{b} \|w_t - \tilde{w}\|^2,
-\label{eq:minibatch_var}
-\end{equation}
-so với $L^2\|w_t - \tilde{w}\|^2$ khi $b=1$. Như vậy, phương sai giảm tỉ lệ nghịch với $b$, cho phép sử dụng bước học lớn hơn hoặc giảm số bước vòng trong $m$. Trong thực tế, nếu có $K$ bộ xử lý song song, ta có thể chọn $b = K$ và tính các gradient thành phần trong $B_t$ một cách đồng thời, khiến thời gian mỗi bước không tăng đáng kể so với $b=1$ trên phần cứng tuần tự.
-
-Phân tích hội tụ của SVRG mini‑batch về cơ bản tương tự như bản gốc, với các hằng số được điều chỉnh. Độ phức tạp tổng số gradient thành phần vẫn là $\mathcal{O}((n + \kappa)\log(1/\epsilon))$, nhưng số bước lặp (và do đó thời gian thực thi) có thể giảm đáng kể nhờ song song hóa. Biến thể này đặc biệt phổ biến khi huấn luyện mạng nơ-ron sâu trên GPU.
-
-\subsection{Proximal SVRG}
-\label{subsec:proximal_svrg}
-
-Nhiều bài toán học máy có dạng tổng của một hàm trơn và một hàm phạt không trơn nhưng có cấu trúc đơn giản, tiêu biểu là chuẩn hóa $\ell_1$ (LASSO), chuẩn hóa nhóm (group lasso), hay ràng buộc hộp. Dạng tổng quát là:
-\begin{equation}
-\min_{w \in \mathbb{R}^d} \; \Phi(w) = P(w) + R(w) = \frac{1}{n}\sum_{i=1}^n f_i(w) + R(w),
-\label{eq:composite}
-\end{equation}
-trong đó mỗi $f_i$ là $L$‑trơn và $R(w)$ là hàm lồi, nửa liên tục dưới, nhưng có thể không khả vi. Để xử lý thành phần $R$, thuật toán \textbf{Proximal SVRG} (còn gọi là SVRG với toán tử proximal) thay bước cập nhật thông thường bằng một bước \textbf{proximal gradient}:
-\begin{equation}
-w_{t+1} = \operatorname{prox}_{\eta R}\bigl( w_t - \eta v_t \bigr),
-\label{eq:prox_svrg}
-\end{equation}
-trong đó $v_t$ vẫn là ước lượng gradient hiệu chỉnh cho $P$ như trong \eqref{eq:svrg_v}, và toán tử proximal được định nghĩa
-\begin{equation}
-\operatorname{prox}_{R}(u) = \argmin_{w} \left\{ R(w) + \frac{1}{2}\|w - u\|^2 \right\}.
-\end{equation}
-Toán tử này có thể tính nhanh với nhiều dạng $R$ thông dụng (ví dụ, với $R(w) = \lambda \|w\|_1$, $\operatorname{prox}_{\eta R}(u) = \operatorname{soft\_threshold}(u, \eta\lambda)$).
-
-Nhờ tính không chệch của $v_t$ và tính chất co rút của proximal operator (firmly non‑expansive), Proximal SVRG vẫn đảm bảo hội tụ tuyến tính nếu $\Phi$ là lồi mạnh (ví dụ nhờ $R$ chứa số hạng $\ell_2$ hoặc bản thân $P$ lồi mạnh). Khi $\Phi$ chỉ lồi (không mạnh), bằng cách kết hợp với kỹ thuật restart hoặc thêm một số hạng chuẩn hóa nhỏ, ta vẫn thu được tốc độ hội tụ $O(1/T)$. Proximal SVRG vì thế là công cụ mạnh cho các mô hình thưa (sparse) và có ràng buộc.
-
-\subsection{SVRG cho bài toán lồi tổng quát (không mạnh)}
-\label{subsec:svrg_convex}
-
-Trong trường hợp $P$ chỉ là \textbf{lồi} (không nhất thiết lồi mạnh), phân tích ở Mục~\ref{sec:svrg_convergence} không áp dụng trực tiếp vì các bất đẳng thức lồi mạnh được sử dụng để kiểm soát phương sai và chứng minh sự co rút. Tuy nhiên, SVRG vẫn có thể được điều chỉnh để giải quyết lớp bài toán này thông qua hai cách tiếp cận chính.
-
-\textbf{Thêm số hạng chuẩn hóa nhỏ.} Một cách đơn giản là thêm một lượng nhỏ $\frac{\tau}{2}\|w\|^2$ vào $P$, với $\tau > 0$, biến bài toán thành lồi mạnh. Nếu $\tau$ được chọn đủ nhỏ, nghiệm của bài toán đã chuẩn hóa sẽ gần với nghiệm của bài toán gốc. Khi đó, ta có thể áp dụng SVRG tiêu chuẩn và đạt hội tụ tuyến tính về điểm tối ưu của hàm đã chuẩn hóa.
-
-\textbf{Kỹ thuật restart (khởi động lại).} Một cách tổng quát và hiệu quả hơn, không làm thay đổi bài toán, là sử dụng \textbf{chiến lược restart} (restart schedule). Cụ thể, ta chạy SVRG trong một số epoch nhất định với bước học và $m$ được chọn phù hợp, sau đó \emph{khởi động lại} thuật toán: giảm bước học, tăng số bước vòng trong, và sử dụng điểm neo cuối cùng làm điểm bắt đầu mới. Quá trình này lặp lại theo các chu kỳ. Phân tích lý thuyết cho thấy rằng nếu bài toán chỉ lồi (có thêm giả thiết về tính liên tục Lipschitz của $P$ hoặc chặn tập khả thi), SVRG với restart có thể đạt tốc độ hội tụ dưới tuyến tính $O(1/T)$ về giá trị hàm, trong đó $T$ là tổng số lần đánh giá gradient thành phần. Đây là cùng tốc độ với GD trên bài toán lồi trơn, nhưng SVRG có thể hưởng lợi từ cấu trúc tổng hữu hạn với chi phí mỗi epoch vừa phải.
-
-Một cách tổng quát, nếu bài toán chỉ lồi và $P$ là $L$‑trơn, với các tham số được thiết lập thích hợp, SVRG (với restart hoặc trung bình động) đáp ứng
-\begin{equation}
-\mathbb{E}\bigl[ P(\bar{w}_T) - P(w^*) \bigr] \le \mathcal{O}\!\left( \frac{L}{T} \|w_0 - w^*\|^2 \right),
-\end{equation}
-tương tự như GD nhưng với chi phí mỗi epoch chỉ là $O(n + m)$ gradient thành phần. Nhờ đó, SVRG vẫn là lựa chọn hấp dẫn cho các bài toán lồi quy mô lớn ngay cả khi thiếu tính lồi mạnh.
-
-\begin{remark}
-Các phân tích chi tiết cho các biến thể này có thể được tìm thấy trong \cite{johnson2013accelerating} (cho cả ba trường hợp), \cite{nitanda2014stochastic} (cho proximal), và \cite{reddi2016stochastic} (cho bài toán không lồi mạnh/không lồi). Chúng tôi không đi sâu vào chứng minh do phạm vi giới hạn của khóa luận.
-\end{remark}
-
-
-\section{Thảo luận về lựa chọn siêu tham số}
-\label{sec:svrg_hyperparams}
-
-Hiệu năng của thuật toán SVRG phụ thuộc một cách nhạy cảm vào hai siêu tham số chính: \textbf{bước học} (step size) $\eta$ và \textbf{số bước vòng trong} $m$ (hay tần suất cập nhật điểm neo). Phần này thảo luận các nguyên tắc lý thuyết, quan sát thực nghiệm và những hướng dẫn thực tiễn giúp lựa chọn chúng một cách hiệu quả.
-
+Phân tích định lượng từ Bảng \ref{tab:complexity_compare} vạch rõ ranh giới hiệu năng trong môi trường dữ liệu lớn:
 \begin{itemize}
-    \item \textbf{Tần suất cập nhật điểm neo $m$ (độ dài epoch).}  
-    Trong lý thuyết, $m$ đóng vai trò quyết định đến tốc độ hội tụ tuyến tính. Ở Mục~\ref{sec:svrg_convergence}, ta thấy rằng nếu $m$ được chọn tỉ lệ với số điều kiện $\kappa = L/\mu$ (cụ thể $m = \Theta(\kappa)$), sai số của mỗi epoch giảm theo một hệ số co $\rho < 1$ không phụ thuộc vào $\kappa$. Điều này đảm bảo tổng số epoch cỡ $\mathcal{O}(\log(1/\epsilon))$ và tổng chi phí gradient là $\mathcal{O}((n + \kappa)\log(1/\epsilon))$.  
-    Nếu chọn $m$ quá nhỏ, điểm neo được cập nhật quá thường xuyên, dẫn đến chi phí gradient toàn phần tăng cao (mỗi epoch chỉ thực hiện rất ít bước rẻ). Ở thái cực ngược lại, nếu $m$ quá lớn, điểm neo trở nên lạc hậu so với các điểm lặp trong epoch, làm gia tăng phương sai (xem \eqref{eq:svrg_var_bound_motivation}) và có thể phá hỏng tính chất co rút, thậm chí đòi hỏi bước học nhỏ hơn.  
-    Trong thực tế, giá trị $m$ thường không được chọn dựa trên $\kappa$ (vì $\kappa$ khó ước lượng chính xác trong các bài toán lớn). Thay vào đó, một lựa chọn phổ biến và cho kết quả tốt là \textbf{$m = 2n$}, tương đương với việc mỗi epoch quét qua tập dữ liệu hai lần (một lần toàn phần và một lần ngẫu nhiên). Các giá trị $m = n$ hoặc $m = 5n$ cũng thường được dùng. Kinh nghiệm cho thấy chỉ cần $m$ đủ lớn để khấu hao chi phí gradient toàn phần nhưng không vượt quá vài lần $n$, thuật toán đã hoạt động ổn định.
-
-    \item \textbf{Bước học $\eta$.}  
-    Về mặt lý thuyết, để đảm bảo phép chứng minh hội tụ chặt chẽ, bước học thường được chọn rất nhỏ, ví dụ $\eta = 1/(10 L \kappa)$ (xem Định lý~\ref{theorem:svrg_linear}). Tuy nhiên, trong thực nghiệm, những giá trị lớn hơn nhiều thường được sử dụng thành công. Nguyên nhân là các cận lý thuyết thường “lỏng” (conservative) do sử dụng các bất đẳng thức tổng quát; trên nhiều tập dữ liệu thực, cấu trúc hàm mục tiêu thuận lợi hơn.  
-    Một lựa chọn thường thấy là $\eta = 1/L$, với $L$ là hằng số trơn của mỗi $f_i$ (hoặc của $P$). Đối với hồi quy logistic có chuẩn hóa $\ell_2$, $L$ có thể ước lượng được (ví dụ $L = 0.25 \max_i \|x_i\|^2 + \lambda$). Bước học này tương tự như trong GD, nhưng SVRG hưởng lợi từ giảm phương sai nên vẫn hội tụ nhanh. Đôi khi $\eta = 2/L$ hay thậm chí lớn hơn vẫn cho kết quả tốt nếu $m$ được chọn đủ lớn.  
-    Khi không có sẵn ước lượng tốt cho $L$, một cách đơn giản là thực hiện \textbf{tìm kiếm lưới} (grid search) thô trên một tập con dữ liệu nhỏ, với các giá trị $\eta \in \{0.01, 0.05, 0.1, 0.5, 1, 5\}$, sau đó chọn giá trị cho hội tụ nhanh và ổn định nhất. Cũng có thể sử dụng chiến lược giảm bước học sau mỗi epoch (tương tự SGD) để tăng tính ổn định ở giai đoạn cuối.
-
-    \item \textbf{Mối quan hệ giữa $m$ và $\eta$.}  
-    $m$ và $\eta$ không độc lập với nhau. Khi $m$ lớn, điểm neo cũ đi nên phương sai cao hơn, đòi hỏi bước học nhỏ hơn để tránh dao động. Ngược lại, nếu chọn $\eta$ nhỏ, ta có thể cần $m$ lớn hơn để epoch đủ tiến triển. Trong thực hành, người ta thường cố định $m = 2n$ (hoặc $5n$) rồi chỉ tối ưu $\eta$, vì $m$ gắn với chi phí tính toán (mỗi epoch mất $n + m$ gradient). Đây là một sự cân bằng đơn giản và hiệu quả.
+    \item Khi bài toán có độ phức tạp cao hoặc yêu cầu nghiệm có độ chính xác cực kỳ khắt khe ($\epsilon \to 0$), đại lượng $1/\epsilon$ của SGD tăng trưởng bùng nổ theo cấp số đa thức, khiến SGD bị tụt lại rất xa phía sau do thắt nút cổ chai phương sai.
+    \item Xét trên phương diện cấu trúc dữ liệu quy mô lớn ($n$ vô cùng lớn), tổng chi phí của GD gánh chịu một hệ số nhân dạng tích $n \times \frac{L}{\gamma}$. Trong khi đó, tổng chi phí của SVRG chỉ tồn tại dưới dạng cấu trúc tuyến tính cộng tuyến: $\mathcal{O}((n + L/\gamma)\log(1/\epsilon))$. 
 \end{itemize}
+Sự chuyển dịch từ phép nhân sang phép cộng trong công thức tính toán độ phức tạp là một bước tiến mang ý nghĩa cách mạng. Nó chứng minh rằng SVRG vừa duy trì được lợi thế tính toán siêu nhẹ trên từng mẫu dữ liệu đơn lẻ, vừa giải phóng hệ thống khỏi sự phụ thuộc nặng nề vào quy mô tập mẫu $n$ của phương pháp trượt gradient toàn phần, thiết lập một tiêu chuẩn hiệu năng vượt trội trong lý thuyết tối ưu hóa ngẫu nhiên hiện đại.
 
-\noindent\textbf{Khuyến nghị chung:} Đối với hầu hết các bài toán cỡ vừa, có thể bắt đầu với $m = 2n$ và $\eta = 1/L$ (nếu biết $L$) hoặc $\eta = 0.1$. Nếu thuật toán dao động, giảm $\eta$; nếu hội tụ quá chậm, tăng $m$ hoặc $\eta$ một cách thận trọng. Cách tiếp cận thực dụng này giúp SVRG đạt hiệu năng cao mà không cần tối ưu hóa tham số quá phức tạp, đồng thời giữ vững các đảm bảo lý thuyết về hội tụ tuyến tính.
+\subsection{Các biến thể quan trọng}
+
+Để mở rộng phạm vi ứng dụng của thuật toán SVRG nguyên bản từ lớp bài toán lồi mạnh, trơn sang các ngữ cảnh thực tế phức tạp hơn—chẳng hạn như xử lý dữ liệu lớn trên kiến trúc song song, tối ưu hóa các hàm mục tiêu không khả vi, hoặc giải quyết bài toán lồi tổng quát—nhiều biến thể quan trọng đã được phát triển và chứng minh toán học một cách chặt chẽ.
+
+\subsubsection{SVRG với mini-batch}
+
+Trong môi trường tính toán hiện đại, việc cập nhật tham số dựa trên một mẫu đơn lẻ tại mỗi bước lặp nội bộ của SVRG có thể làm giảm hiệu năng khai thác năng lực phần cứng (như GPU/TPU) và gây ra những dao động ngẫu nhiên lớn. Biến thể SVRG với mini-batch được đề xuất nhằm trung hòa nhược điểm này bằng cách thay thế một mẫu đơn lẻ $i_t$ bằng một tập hợp chỉ số ngẫu nhiên $\mathcal{B}_t \subset \{1, \dots, n\}$ có kích thước $|\mathcal{B}_t| = b$ \cite{schmidt2017minimizing}. Công thức ước lượng gradient hiệu chỉnh lúc này trở thành:
+\begin{equation}
+v_t = \frac{1}{b} \sum_{i \in \mathcal{B}_t} \nabla \psi_i(w_{t-1}) - \frac{1}{b} \sum_{i \in \mathcal{B}_t} \nabla \psi_i(\tilde{w}) + \nabla P(\tilde{w})
+\end{equation}
+Như Schmidt và các cộng sự \cite{schmidt2017minimizing} đã phân tích chi tiết trong Mục 4.7, việc tích hợp mini-batch tạo ra một sự đánh đổi toán học tường minh (trade-off) giữa chi phí tính toán của một vòng lặp và tốc độ hội tụ lý thuyết. Về mặt ưu điểm, tăng kích thước batch $b$ giúp thu hẹp trực tiếp phương sai gốc của toán tử ước lượng ngẫu nhiên ngay từ cấu trúc số hạng đầu tiên, cho phép thuật toán áp dụng các hệ số bước học $\eta$ lớn hơn và tăng tính ổn định của quỹ đạo trượt. Tuy nhiên, về mặt chi phí, khối lượng tính toán gradient tại mỗi bước tăng tuyến tính theo hệ số $b$. Do đó, việc lựa chọn kích thước mini-batch tối ưu phụ thuộc chặt chẽ vào kiến trúc phần cứng, trong đó các giá trị $b$ nhỏ ($b \in [10, 100]$) thường đạt hiệu năng tối ưu nhờ cân bằng được cả hai yếu tố trên.
+
+\subsubsection{Proximal SVRG}
+
+Trong nhiều ứng dụng học máy, đặc biệt là các bài toán lựa chọn đặc trưng (feature selection) hoặc bài toán tối ưu hóa cấu trúc thưa (sparsity-inducing), hàm mục tiêu thường xuất hiện dưới dạng toán tử tổ hợp (composite optimization):
+\begin{equation}
+\min_{w \in \mathbb{R}^d} F(w) := P(w) + R(w)
+\end{equation}
+Trong đó, $P(w) = \frac{1}{n} \sum_{i=1}^n \psi_i(w)$ là thành phần lồi trơn Lipschitz, còn $R(w)$ là hàm chỉnh hóa lồi nhưng không khả vi (ví dụ, hàm chỉnh hóa $L_1$-norm dạng $R(w) = \lambda \|w\|_1$). Để giải quyết cấu trúc không trơn này, Allen-Zhu \cite{allen2017katyusha} và Driggs \cite{driggs2022accelerating} đã trình bày cấu trúc của thuật toán Proximal SVRG bằng cách tích hợp toán tử tiệm cận (proximal operator).
+
+Cụ thể, tại vòng lặp trong của Proximal SVRG, hướng trượt ngẫu nhiên hiệu chỉnh $v_t$ vẫn được tính toán trên thành phần trơn $P(w)$ tương tự công thức (\ref{eq:svrg_estimator}). Sau đó, bước cập nhật tham số không thực hiện trượt gradient trực tiếp mà được thông qua một bài toán tối ưu phụ trợ định hình bởi toán tử proximal của hàm $R(w)$ \cite{allen2017katyusha}:
+\begin{equation}
+w_t = \text{prox}_{\eta R} \left( w_{t-1} - \eta v_t \right) := \arg\min_{u \in \mathbb{R}^d} \left\{ R(u) + \frac{1}{2\eta} \|u - (w_{t-1} - \eta v_t)\|^2 \right\}
+\end{equation}
+Sự kết hợp này cho phép toán tử giảm phương sai hoạt động độc lập trên phần trơn để triệt tiêu nhiễu, trong khi toán tử proximal xử lý điểm kỳ dị không khả vi của $R(w)$ tại mỗi bước lặp nội bộ. Nghiên cứu của Driggs và các cộng sự \cite{driggs2022accelerating} khẳng định rằng biến thể Proximal SVRG vẫn bảo toàn nguyên vẹn tốc độ hội tụ tuyến tính hình học của phiên bản gốc, đồng thời mở rộng khả năng tối ưu hóa cho lớp bài toán chỉnh hóa thưa quy mô lớn.
+
+\subsubsection{SVRG cho bài toán lồi tổng quát (không mạnh)}
+
+Khi hàm mục tiêu $P(w)$ chỉ thỏa mãn tính chất lồi trơn Lipschitz mà thiếu đi giả thiết lồi mạnh ($\gamma = 0$), hệ số co $\alpha$ trong công thức (\ref{eq:alpha_co}) không còn được ràng buộc nghiêm ngặt nhỏ hơn 1, khiến phép chứng minh hội tụ tuyến tính ban đầu không thể áp dụng trực tiếp. Mặc dù vậy, Johnson và Zhang \cite{johnson2013accelerating} đã chỉ ra trong phần phân tích lý thuyết rằng SVRG vẫn có khả năng đạt được tốc độ hội tụ cận tối ưu ở mức $\mathcal{O}(1/T)$ cho các hàm lồi tổng quát, vượt trội hơn tốc độ $\mathcal{O}(1/\sqrt{T})$ của SGD cổ điển.
+
+Để hiện thực hóa tốc độ $\mathcal{O}(1/k)$ một cách tường minh và ổn định trên thực tế, Schmidt và các cộng sự \cite{schmidt2017minimizing} đã làm rõ một chiến lược kỹ thuật dựa trên nguyên lý chỉnh hóa lồi mạnh nhân tạo (perturbation/regularization technique). Cụ thể, ta tiến hành biến đổi bài toán gốc không lồi mạnh bằng cách bổ sung thêm một số hạng chỉnh hóa bình phương với một trọng số siêu nhỏ $\delta > 0$:
+\begin{equation}
+\min_{w \in \mathbb{R}^d} P_\delta(w) := P(w) + \frac{\delta}{2} \|w - w_0\|^2
+\end{equation}
+Hàm mục tiêu biến đổi $P_\delta(w)$ lúc này trở thành một hàm lồi mạnh với hằng số $\gamma = \delta$. Thuật toán SVRG tiêu chuẩn được áp dụng trực tiếp trên hàm mục tiêu mới này để khai thác tốc độ hội tụ tuyến tính của lớp hàm lồi mạnh. Bằng cách thiết lập giá trị $\delta$ tỷ lệ nghịch với độ chính xác mong muốn ($\delta \approx \mathcal{O}(\epsilon)$), biến thể này khôi phục thành công tốc độ hội tụ tổng thể $\mathcal{O}(1/k)$ cho bài toán lồi trơn tổng quát mà không cần thay đổi cấu trúc cốt lõi của giải thuật \cite{schmidt2017minimizing}.
+
+\subsection{Thảo luận về lựa chọn siêu tham số}
+
+Hiệu năng thực tế của thuật toán SVRG chịu ảnh hưởng sâu sắc bởi ba siêu tham số cốt lõi: độ dài vòng lặp trong $m$, chiến lược cập nhật điểm chụp $\tilde{w}_s$, và hệ số bước học cố định $\eta$. Việc cấu hình các tham số này yêu cầu sự thấu hiểu đồng thời cả lý thuyết giới hạn toán học và các đặc trưng thực nghiệm của tập dữ liệu huấn luyện.
+
+\begin{enumerate}
+    \item \textbf{Cấu hình độ dài vòng lặp trong ($m$):} Từ biểu thức tính toán hệ số co hình học $\alpha$ tại (\ref{eq:alpha_co}), để đảm bảo vế phải nhỏ hơn 1, tích số $\gamma m \eta$ bắt buộc phải đủ lớn, điều này đồng nghĩa với việc $m$ phải tỷ lệ thuận với nghịch đảo của hằng số lồi mạnh và bước học. Tuy nhiên, nếu chọn $m$ quá lớn, thuật toán sẽ thực hiện quá nhiều bước ngẫu nhiên dựa trên một điểm chụp đã lỗi thời, khiến hướng hiệu chỉnh mất đi tính chính xác. Johnson và Zhang \cite{johnson2013accelerating} đã đưa ra gợi ý mang tính thực tiễn: độ dài vòng lặp trong $m$ nên được thiết lập cùng bậc đại số với kích thước tập mẫu $n$ nhưng lớn hơn một chút, phổ biến nhất là cấu hình $m = 2n$ hoặc $m = 5n$ đối với lớp bài toán lồi trong học máy.
+    \item \textbf{Chiến lược lựa chọn điểm chụp ($\tilde{w}_s$):} SVRG cung cấp hai trường phái thiết lập điểm chụp cho chu kỳ kế tiếp từ tập hợp các trạng thái $\{w_0, w_1, \dots, w_m\}$ của vòng lặp trong hiện tại:
+    \begin{itemize}
+        \item \textit{Giá trị trung bình hoặc ngẫu nhiên:} Phân tích lý thuyết toán học của Johnson và Zhang \cite{johnson2013accelerating} dựa trên việc chọn $\tilde{w}_s$ là giá trị trung bình chuỗi $\frac{1}{m}\sum w_{t-1}$ hoặc lấy mẫu ngẫu nhiên đều từ vòng lặp trong. Chiến lược này giúp làm mịn quỹ đạo và đơn giản hóa các chứng minh hội tụ, tuy nhiên nó làm mất đi tính chất thưa (sparsity) của nghiệm nếu bài toán có chứa thành phần không trơn $L_1$.
+        \item \textit{Giá trị cuối cùng ($w_m$):} Schmidt và các cộng sự \cite{schmidt2017minimizing} nhấn mạnh rằng trên phương diện thực nghiệm, việc thiết lập trực tiếp $\tilde{w}_s = w_m$ (điểm cuối cùng của vòng lặp) mang lại hiệu năng bứt tốc mạnh mẽ hơn rất nhiều. Hơn nữa, nó bảo toàn hoàn toàn cấu trúc đặc trưng (như tính thưa của trọng số) thu được từ các bước tối ưu hóa trước đó.
+    \end{itemize}
+    \item \textbf{Đặc trưng của hệ số bước học ($\eta$):} Một trong những phát hiện thực nghiệm quan trọng nhất trong nghiên cứu của Johnson và Zhang \cite{johnson2013accelerating} (Section 5) là SVRG hoạt động cực kỳ hiệu quả và ổn định với một bước học $\eta$ lớn và giữ hằng số cố định xuyên suốt. Trái ngược với SGD—nơi người dùng phải liên tục tinh chỉnh các lịch trình giảm bước học phức tạp để tránh phân kỳ—SVRG chỉ yêu cầu kiểm soát $\eta < \frac{1}{4L}$. Khả năng dung nạp sải bước lớn giúp SVRG duy trì áp lực hội tụ mạnh mẽ, giải phóng người triển khai khỏi gánh nặng dò tìm siêu tham số và tối ưu hóa tối đa tốc độ xử lý trên các bài toán học máy quy mô lớn.
+\end{enumerate}
