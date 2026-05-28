@@ -2,189 +2,222 @@
 
 \section{Cơ sở giải tích lồi}
 
-\subsection{Tập lồi, hàm lồi}
-
-Trong lý thuyết tối ưu hóa nói chung và tối ưu hóa trong học máy nói riêng, hình học lồi đóng vai trò là nền tảng toán học cốt lõi quyết định tính khả thi và hiệu năng lý thuyết của các thuật toán. Khái niệm cơ bản đầu tiên cần xem xét là tập lồi. Theo định nghĩa kinh điển của Boyd và Vandenberghe \cite{boyd2004convex}, một tập hợp $C \subseteq \mathbb{R}^d$ được gọi là tập lồi (convex set) nếu với mọi cặp điểm $x, y \in C$ và với mọi hệ số $\theta$ thỏa mãn $0 \le \theta \le 1$, điểm kết hợp lồi dưới đây cũng thuộc về tập $C$:
+\begin{definition}[Tập lồi]
+\label{def:convex_set}
+Một tập hợp $C \subseteq \mathbb{R}^d$ được gọi là tập lồi (convex set) nếu với mọi $x, y \in C$ và với mọi $\theta \in [0, 1]$, điểm kết hợp lồi sau đây cũng thuộc về $C$:
 \begin{equation}
 \theta x + (1 - \theta)y \in C
 \end{equation}
-Về mặt hình học, điều này có nghĩa là đoạn thẳng nối hai điểm bất kỳ nằm trong tập lồi phải hoàn toàn nằm trọn trong tập hợp đó. Lớp tập hợp này đảm bảo không gian tìm kiếm nghiệm không bị chia cắt hoặc chứa các khoảng lõm có thể cô lập nghiệm tối ưu toàn cục.
+\end{definition}
 
-Từ định nghĩa về tập lồi, khái niệm hàm lồi được thiết lập nhằm xây dựng cấu trúc cho hàm mục tiêu cần tối thiểu hóa. Một hàm số $f: C \to \mathbb{R}$ xác định trên tập lồi $C$ được gọi là hàm lồi (convex function) nếu với mọi $x, y \in C$ và mọi $\theta \in [0, 1]$, ta luôn có bất đẳng thức \cite{boyd2004convex}:
+Về mặt hình học, định nghĩa \ref{def:convex_set} có nghĩa là đoạn thẳng nối hai điểm bất kỳ nằm trong tập lồi phải hoàn toàn nằm trọn trong tập hợp đó. Lớp tập hợp này đảm bảo không gian tìm kiếm nghiệm không bị chia cắt hoặc chứa các khoảng lõm có thể cô lập nghiệm tối ưu toàn cục.
+
+\begin{definition}[Hàm lồi]
+\label{def:convex_function}
+Một hàm số $f: C \to \mathbb{R}$ xác định trên tập lồi $C \subseteq \mathbb{R}^d$ được gọi là hàm lồi (convex function) nếu với mọi $x, y \in C$ và mọi $\theta \in [0, 1]$, ta luôn có bất đẳng thức:
 \begin{equation}\label{eq:convex_func}
 f(\theta x + (1 - \theta)y) \le \theta f(x) + (1 - \theta)f(y)
 \end{equation}
-Ý nghĩa hình học của bất đẳng thức (\ref{eq:convex_func}) thể hiện rằng đoạn thẳng nối hai điểm bất kỳ trên đồ thị của hàm số luôn nằm phía trên hoặc trùng với đồ thị của chính hàm số đó. Trong trường hợp bất đẳng thức diễn ra một cách nghiêm ngặt (dấu $<$ xảy ra với mọi $x \neq y$ và $\theta \in (0, 1)$), hàm $f$ được gọi là hàm lồi nghiêm ngặt (strictly convex), đảm bảo tính duy nhất của nghiệm tối ưu nếu tồn tại.
+Nếu bất đẳng thức diễn ra một cách nghiêm ngặt (dấu $<$ xảy ra với mọi $x \neq y$ và $\theta \in (0, 1)$), hàm $f$ được gọi là hàm lồi nghiêm ngặt (strictly convex).
+\end{definition}
 
-Đối với các hàm số có tính chất toán học tốt hơn, cụ thể là lớp hàm khả vi liên tục, Nesterov \cite{nesterov2004introductory} đã hệ thống hóa điều kiện lồi thông qua tính chất của đạo hàm bậc nhất (first-order condition). Theo đó, một hàm khả vi $f$ là lồi khi và chỉ khi miền xác định của nó là một tập lồi và bất đẳng thức sau được thỏa mãn với mọi $x, y \in \text{dom } f$:
+Ý nghĩa hình học của bất đẳng thức (\ref{eq:convex_func}) thể hiện rằng đoạn thẳng nối hai điểm bất kỳ trên đồ thị của hàm số luôn nằm phía trên hoặc trùng với đồ thị của chính hàm số đó. Tính lồi nghiêm ngặt đảm bảo tính duy nhất của nghiệm tối ưu nếu tồn tại.
+
+Đối với các hàm số có tính chất toán học tốt hơn, cụ thể là lớp hàm khả vi liên tục, ta có thể đặc trưng tính lồi thông qua điều kiện bậc nhất như sau.
+
+\begin{proposition}[Điều kiện bậc nhất của hàm lồi khả vi]
+\label{prop:first_order_convex}
+Cho $f$ là hàm khả vi liên tục trên miền xác định $\operatorname{dom} f$ là một tập lồi. Khi đó $f$ là hàm lồi khi và chỉ khi với mọi $x, y \in \operatorname{dom} f$, bất đẳng thức sau được thỏa mãn:
 \begin{equation}\label{eq:first_order_convex}
 f(y) \ge f(x) + \langle \nabla f(x), y - x \rangle
 \end{equation}
+\end{proposition}
+
 Bất đẳng thức (\ref{eq:first_order_convex}) cung cấp một góc nhìn quan trọng: tiếp diện của hàm lồi tại một điểm bất kỳ luôn là một chặn dưới tuyến tính (global underestimator) của hàm số đó trên toàn bộ miền xác định. Đây chính là tính chất toán học cốt lõi cho phép các thuật toán trượt gradient dựa vào thông tin cục bộ tại một điểm để đưa ra hướng dịch chuyển tiệm cận về phía nghiệm tối ưu toàn cục.
 
-\subsection{Điều kiện tối ưu, gradient và dưới gradient}
+\begin{definition}[Gradient và dưới gradient]
+\label{def:gradient_subgradient}
+\leavevmode
+\begin{enumerate}
+    \item Với hàm khả vi $f$, gradient của $f$ tại điểm $x$, ký hiệu $\nabla f(x)$, là vectơ chứa các đạo hàm riêng phần: $\nabla f(x) = \left( \frac{\partial f}{\partial x_1}, \dots, \frac{\partial f}{\partial x_d} \right)^T$.
+    \item Một vectơ $g \in \mathbb{R}^d$ được gọi là một dưới gradient (subgradient) của hàm lồi $f$ tại điểm $x$ nếu với mọi $y \in \operatorname{dom} f$:
+    \begin{equation}
+    f(y) \ge f(x) + \langle g, y - x \rangle
+    \end{equation}
+    Tập hợp tất cả các dưới gradient của $f$ tại $x$ được ký hiệu là $\partial f(x)$ và gọi là dưới vi phân (subdifferential).
+\end{enumerate}
+\end{definition}
 
-Việc xác định một điểm có phải là nghiệm tối ưu của bài toán hay không đòi hỏi các tiêu chuẩn toán học nghiêm ngặt. Xét bài toán tối ưu hóa không ràng buộc dạng tổng quát $\min_{x \in \mathbb{R}^d} f(x)$, trong đó $f$ là một hàm lồi và khả vi. Theo Boyd và Vandenberghe \cite{boyd2004convex}, điều kiện cần và đủ để một điểm $x^*$ trở thành nghiệm tối ưu toàn cục là gradient của hàm mục tiêu tại điểm đó phải triệt tiêu:
-\begin{equation}\label{eq:opt_criterion}
-\nabla f(x^*) = 0
-\end{equation}
-Sự khác biệt mang tính quyết định của tối ưu hóa lồi so với tối ưu hóa phi lồi nằm ở chỗ: điều kiện đạo hàm bằng không (\ref{eq:opt_criterion}) không chỉ dừng lại ở việc xác định điểm cực trị cục bộ hay điểm yên ngựa, mà nó đảm bảo chắc chắn rằng $x^*$ là điểm tối tiểu toàn cục (global minimum). Do đó, mục tiêu của các thuật toán như GD, SGD hay SVRG thực chất là thiết lập một chuỗi các điểm xấp xỉ sao cho vectơ gradient tiến dần về mức không.
+\begin{theorem}[Điều kiện tối ưu]
+\label{thm:optimality_condition}
+\leavevmode
+\begin{enumerate}
+    \item Nếu $f$ là hàm lồi khả vi trên $\mathbb{R}^d$, thì $x^*$ là nghiệm tối ưu toàn cục của bài toán $\min_{x \in \mathbb{R}^d} f(x)$ khi và chỉ khi:
+    \begin{equation}\label{eq:opt_criterion_smooth}
+    \nabla f(x^*) = 0
+    \end{equation}
+    \item Nếu $f$ là hàm lồi nhưng không khả vi, thì $x^*$ là nghiệm tối ưu toàn cục khi và chỉ khi:
+    \begin{equation}\label{eq:opt_criterion_nonsmooth}
+    0 \in \partial f(x^*)
+    \end{equation}
+\end{enumerate}
+\end{theorem}
 
-Tuy nhiên, trong thực tiễn học máy, không phải lúc nào hàm mục tiêu cũng đảm bảo tính khả vi liên tục tại mọi điểm (ví dụ điển hình là các hàm mất mát chứa thành phần chỉnh hóa chứa chuẩn $L_1$ nhằm tạo độ thưa cho tham số). Để giải quyết lớp bài toán không khả vi này, khái niệm gradient được tổng quát hóa thành dưới gradient (subgradient). Theo định nghĩa toán học chính thống từ Nesterov \cite{nesterov2004introductory}, một vectơ $g \in \mathbb{R}^d$ được gọi là một dưới gradient của hàm lồi $f$ tại điểm $x$ nếu bất đẳng thức sau thỏa mãn với mọi $y \in \text{dom } f$:
-\begin{equation}
-f(y) \ge f(x) + \langle g, y - x \rangle
-\end{equation}
-Tập hợp tất cả các vectơ dưới gradient của $f$ tại $x$ được ký hiệu là $\partial f(x)$ và được gọi là dưới vi phân (subdifferential). Khi hàm $f$ không khả vi, điều kiện tối ưu (\ref{eq:opt_criterion}) sẽ được chuyển dịch sang dạng hình học của dưới vi phân, nghĩa là điểm $x^*$ là nghiệm tối ưu toàn cục khi và chỉ khi vectơ không thuộc về tập dưới vi phân tại điểm đó:
-\begin{equation}
-0 \in \partial f(x^*)
-\end{equation}
-Khái niệm này mở ra hướng phát triển cho các biến thể nâng cao của thuật toán giảm phương sai (chẳng hạn như Proximal SVRG) khi đối mặt với các hàm mục tiêu phức hợp chứa thành phần không trơn.
+Sự khác biệt mang tính quyết định của tối ưu hóa lồi so với tối ưu hóa phi lồi nằm ở chỗ: điều kiện (\ref{eq:opt_criterion_smooth}) hoặc (\ref{eq:opt_criterion_nonsmooth}) không chỉ dừng lại ở việc xác định điểm cực trị cục bộ hay điểm yên ngựa, mà nó đảm bảo chắc chắn rằng $x^*$ là điểm tối tiểu toàn cục (global minimum). Do đó, mục tiêu của các thuật toán như GD, SGD hay SVRG thực chất là thiết lập một chuỗi các điểm xấp xỉ sao cho gradient (hoặc dưới gradient) tiến dần về mức không.
 
 \section{Các khái niệm về độ trơn và tốc độ hội tụ}
 
 \subsection{Hàm khả vi liên tục Lipschitz (L-smooth)}
 
-Bên cạnh tính lồi, tốc độ hội tụ và độ ổn định của các giải thuật tối ưu hóa phụ thuộc rất lớn vào mức độ biến thiên của gradient của hàm mục tiêu. Khái niệm then chốt để kiểm soát sự biến thiên này là tính trơn Lipschitz của gradient. Theo hệ thống phân loại các lớp hàm khả vi của Nesterov \cite{nesterov2004introductory}, một hàm số $f$ được gọi là trơn Lipschitz với hằng số $L > 0$ (hay thuộc lớp hàm $C^{1,1}_L$) trên một tập hợp lồi $C$ nếu gradient của nó thỏa mãn điều kiện liên tục Lipschitz sau với mọi $x, y \in C$:
+Bên cạnh tính lồi, tốc độ hội tụ và độ ổn định của các giải thuật tối ưu hóa phụ thuộc rất lớn vào mức độ biến thiên của gradient của hàm mục tiêu. Khái niệm then chốt để kiểm soát sự biến thiên này là tính trơn Lipschitz của gradient.
+
+\begin{definition}[Hàm trơn Lipschitz]
+\label{def:l_smooth}
+Một hàm số $f: \mathbb{R}^d \to \mathbb{R}$ khả vi liên tục được gọi là trơn Lipschitz với hằng số $L > 0$ (hay $L$-smooth) trên tập lồi $C$ nếu gradient của nó thỏa mãn điều kiện liên tục Lipschitz sau với mọi $x, y \in C$:
 \begin{equation}\label{eq:lipschitz_gradient}
 \|\nabla f(x) - \nabla f(y)\| \le L \|x - y\|
 \end{equation}
+\end{definition}
+
 Hằng số $L$ (gọi là hằng số trơn Lipschitz) đóng vai trò định lượng giới hạn trên cho tốc độ thay đổi của vectơ gradient. Khi một hàm số thỏa mãn giả thiết (\ref{eq:lipschitz_gradient}), nó hàm ý rằng bề mặt của hàm mục tiêu không có các biến động quá đột ngột hay các vùng có độ cong tiến đến vô hạn \cite{schmidt2017minimizing}.
 
-Hệ quả toán học quan trọng nhất được rút ra từ điều kiện trơn Lipschitz chính là Bổ đề Xuống (Descent Lemma), thiết lập một chặn trên parabol cho giá trị hàm số \cite{nesterov2004introductory}:
+\begin{lemma}[Bổ đề Descent]
+\label{lem:descent_lemma}
+Nếu $f$ là hàm $L$-smooth trên $\mathbb{R}^d$, thì với mọi $x, y \in \mathbb{R}^d$, ta có bất đẳng thức sau:
 \begin{equation}\label{eq:descent_lemma}
 f(y) \le f(x) + \langle \nabla f(x), y - x \rangle + \frac{L}{2}\|y - x\|^2
 \end{equation}
-Bất đẳng thức (\ref{eq:descent_lemma}) có ý nghĩa đặc biệt quan trọng trong việc thiết kế bước trượt của thuật toán. Nó đảm bảo rằng nếu thuật toán dịch chuyển từ vị trí $x$ theo hướng ngược chiều gradient với một kích thước bước học đủ nhỏ (cụ thể là hệ số bước học $\eta \le 1/L$), giá trị của hàm mục tiêu chắc chắn sẽ giảm xuống sau mỗi vòng lặp mà không xảy ra hiện tượng nhảy quá đà (overshooting) dẫn đến phân kỳ. Đây là điều kiện tiên quyết để chứng minh tính hội tụ của cả phương pháp Gradient Descent truyền thống lẫn các phương pháp ngẫu nhiên cải tiến sau này.
+\end{lemma}
+
+Bổ đề \ref{lem:descent_lemma} có ý nghĩa đặc biệt quan trọng trong việc thiết kế bước trượt của thuật toán. Nó đảm bảo rằng nếu thuật toán dịch chuyển từ vị trí $x$ theo hướng ngược chiều gradient với một kích thước bước học đủ nhỏ (cụ thể là hệ số bước học $\eta \le 1/L$), giá trị của hàm mục tiêu chắc chắn sẽ giảm xuống sau mỗi vòng lặp mà không xảy ra hiện tượng nhảy quá đà (overshooting) dẫn đến phân kỳ. Đây là điều kiện tiên quyết để chứng minh tính hội tụ của cả phương pháp Gradient Descent truyền thống lẫn các phương pháp ngẫu nhiên cải tiến sau này.
 
 \subsection{Tốc độ hội tụ}
 
-Để đánh giá và so sánh hiệu năng giữa các giải thuật tối ưu hóa, các nhà nghiên cứu sử dụng khái niệm tốc độ hội tụ (convergence rate), công cụ định lượng mối quan hệ giữa sai số tối ưu và số lượng vòng lặp thực thi của thuật toán. Nesterov \cite{nesterov2004introductory} chia tiến trình hội tụ thành các cấp độ phổ biến bao gồm hội tụ dưới tuyến tính (sublinear), hội tụ tuyến tính (linear), và hội tụ bậc hai (quadratic). Khóa luận này tập trung phân tích hai cấp độ đầu tiên vốn là trọng tâm của các phương pháp ngẫu nhiên quy mô lớn.
+Để đánh giá và so sánh hiệu năng giữa các giải thuật tối ưu hóa, các nhà nghiên cứu sử dụng khái niệm tốc độ hội tụ (convergence rate), công cụ định lượng mối quan hệ giữa sai số tối ưu và số lượng vòng lặp thực thi của thuật toán.
 
-Hội tụ dưới tuyến tính (sublinear convergence) là đặc tính của các thuật toán có tốc độ giảm sai số tương đối chậm, tuân theo quy luật đa thức. Cụ thể, sai số hàm mục tiêu tại bước lặp $k$, ký hiệu là $e_k = f(x_k) - f(x^*)$, giảm theo tỷ lệ nghịch với số bước lặp:
+\begin{definition}[Tốc độ hội tụ dưới tuyến tính]
+\label{def:sublinear_convergence}
+Một thuật toán được gọi là đạt tốc độ hội tụ dưới tuyến tính (sublinear convergence) nếu sai số hàm mục tiêu tại bước lặp $k$, ký hiệu $e_k = f(x_k) - f(x^*)$, giảm theo tỷ lệ nghịch với số bước lặp:
 \begin{equation}
 e_k \le \frac{C}{k^\alpha}
 \end{equation}
-Trong đó $C > 0$ là hằng số và $\alpha > 0$ (thông thường $\alpha = 0.5$ hoặc $\alpha = 1$). Để đạt được độ chính xác sai số $\epsilon$, các thuật toán hội tụ dưới tuyến tính đòi hỏi số vòng lặp ở mức cấp độ rất lớn là $\mathcal{O}(1/\epsilon)$ hoặc $\mathcal{O}(1/\epsilon^2)$. Đây chính là tốc độ giới hạn mà các phương pháp trượt gradient ngẫu nhiên (SGD) tiêu chuẩn phải chấp nhận do tác động tiêu cực của nhiễu phương sai \cite{johnson2013accelerating}.
+trong đó $C > 0$ là hằng số và $\alpha > 0$ (thông thường $\alpha = 0.5$ hoặc $\alpha = 1$).
+\end{definition}
 
-Ngược lại, hội tụ tuyến tính (linear convergence)—mặc dù mang tên tuyến tính nhưng trên thực tế đại diện cho tốc độ giảm sai số theo hàm mũ (exponential decay)—là trạng thái lý tưởng mà các nhà nghiên cứu luôn hướng tới. Theo mô tả của Boyd và Vandenberghe \cite{boyd2004convex}, một giải thuật đạt tốc độ hội tụ tuyến tính nếu tồn tại một hệ số co $\rho \in (0, 1)$ sao cho:
+Để đạt được độ chính xác sai số $\epsilon$, các thuật toán hội tụ dưới tuyến tính đòi hỏi số vòng lặp ở mức cấp độ rất lớn là $\mathcal{O}(1/\epsilon)$ hoặc $\mathcal{O}(1/\epsilon^2)$. Đây chính là tốc độ giới hạn mà các phương pháp trượt gradient ngẫu nhiên (SGD) tiêu chuẩn phải chấp nhận do tác động tiêu cực của nhiễu phương sai \cite{johnson2013accelerating}.
+
+\begin{definition}[Tốc độ hội tụ tuyến tính]
+\label{def:linear_convergence}
+Một thuật toán được gọi là đạt tốc độ hội tụ tuyến tính (linear convergence) nếu tồn tại một hệ số co $\rho \in (0, 1)$ và hằng số $C > 0$ sao cho:
 \begin{equation}
 e_k \le C \cdot \rho^k
 \end{equation}
-Bất đẳng thức này chứng minh rằng sai số tối ưu được thu hẹp lại theo một tỷ lệ cố định sau mỗi bước lặp độc lập. Hệ quả là số lượng vòng lặp cần thiết để tiệm cận độ chính xác $\epsilon$ chỉ tăng trưởng ở mức logarithmic, tức là $\mathcal{O}(\log(1/\epsilon))$. Việc khôi phục thành công tốc độ hội tụ tuyến tính tiềm năng này cho môi trường tính toán ngẫu nhiên (với chi phí mỗi vòng lặp cố định $\mathcal{O}(1)$) chính là thành tựu kiệt xuất của hướng tiếp cận thu gọn phương sai dự báo mà thuật toán SVRG đại diện \cite{johnson2013accelerating}.
+\end{definition}
+
+Mặc dù mang tên "tuyến tính", định nghĩa \ref{def:linear_convergence} trên thực tế đại diện cho tốc độ giảm sai số theo hàm mũ (exponential decay). Bất đẳng thức này chứng minh rằng sai số tối ưu được thu hẹp lại theo một tỷ lệ cố định sau mỗi bước lặp độc lập. Hệ quả là số lượng vòng lặp cần thiết để tiệm cận độ chính xác $\epsilon$ chỉ tăng trưởng ở mức logarithmic, tức là $\mathcal{O}(\log(1/\epsilon))$. Việc khôi phục thành công tốc độ hội tụ tuyến tính tiềm năng này cho môi trường tính toán ngẫu nhiên (với chi phí mỗi vòng lặp cố định $\mathcal{O}(1)$) chính là thành tựu kiệt xuất của hướng tiếp cận thu gọn phương sai dự báo mà thuật toán SVRG đại diện \cite{johnson2013accelerating}.
 
 \section{Phương pháp Gradient Descent (GD)}
 
 Phương pháp Gradient Descent (GD) truyền thống—hay còn gọi là phương pháp Gradient toàn cục (Full Gradient)—là giải thuật nền tảng nhất để giải bài toán tối ưu hóa không ràng buộc trong học máy. Nguyên lý hoạt động của GD dựa trên việc cập nhật tham số bằng cách dịch chuyển ngược hướng với vectơ gradient của toàn bộ hàm mục tiêu trên tập dữ liệu tại mỗi bước lặp.
 
-\subsection{Phân tích hội tụ}
+\begin{definition}[Quy tắc cập nhật Gradient Descent]
+\label{def:gd_update}
+Cho hàm mục tiêu $P(w)$ khả vi. Quy tắc cập nhật của Gradient Descent tại bước lặp $t$ được xác định bởi:
+\begin{equation}\label{eq:gd_update_rule}
+w_{t+1} = w_t - \eta \nabla P(w_t)
+\end{equation}
+trong đó $\eta > 0$ là hệ số bước học (learning rate).
+\end{definition}
 
-Tính chất hội tụ của phương pháp GD phụ thuộc chặt chẽ vào cấu trúc hình học của hàm mục tiêu $f$. Đối với lớp hàm lồi trơn tổng quát, Nesterov \cite{nesterov2004introductory} đã cung cấp một chứng minh toán học chặt chẽ chỉ ra rằng phương pháp gradient với kích thước bước học cố định ($\eta \le 1/L$) đạt được tốc độ hội tụ dưới tuyến tính ở mức $\mathcal{O}(1/k)$, trong đó $k$ là số vòng lặp. Điều này có nghĩa là sai số hàm mục tiêu $f(x_k) - f(x^*)$ giảm tỷ lệ nghịch với số bước thực thi, và thuật toán cần $\mathcal{O}(1/\epsilon)$ vòng lặp để đạt được độ chính xác mong muốn $\epsilon$.
+\begin{theorem}[Hội tụ của GD cho hàm lồi trơn tổng quát]
+\label{thm:gd_convex_smooth}
+Giả sử $f$ là hàm lồi và $L$-smooth trên $\mathbb{R}^d$. Khi đó phương pháp Gradient Descent với kích thước bước học cố định $\eta = 1/L$ đạt được tốc độ hội tụ:
+\begin{equation}
+f(x_k) - f(x^*) \le \frac{2L \|x_0 - x^*\|^2}{k}
+\end{equation}
+nghĩa là thuật toán có tốc độ hội tụ dưới tuyến tính $\mathcal{O}(1/k)$.
+\end{theorem}
 
-Khi hàm mục tiêu sở hữu cấu trúc tốt hơn, cụ thể là lớp hàm lồi mạnh (strongly convex), tiến trình hội tụ của GD sẽ tăng tốc một cách đáng kể. Theo phân tích toán học toàn diện của Boyd và Vandenberghe \cite{boyd2004convex}, khi áp dụng các kỹ thuật tìm kiếm đường (như backtracking line search hoặc exact line search), sai số tối ưu của GD giảm theo cấp số nhân. Thuật toán thiết lập được tốc độ hội tụ tuyến tính (linear convergence), cho phép thu hẹp khoảng cách đến nghiệm tối ưu toàn cục chỉ sau một số lượng vòng lặp hữu hạn ở mức quy mô quy định bởi hàm logarithmic $\mathcal{O}(\log(1/\epsilon))$.
+\begin{theorem}[Hội tụ của GD cho hàm lồi mạnh]
+\label{thm:gd_strongly_convex}
+Giả sử $f$ là hàm $\gamma$-lồi mạnh và $L$-smooth trên $\mathbb{R}^d$. Khi đó phương pháp Gradient Descent với kích thước bước học cố định $\eta = 1/L$ đạt được tốc độ hội tụ tuyến tính:
+\begin{equation}
+f(x_k) - f(x^*) \le \left(1 - \frac{\gamma}{L}\right)^k \left[ f(x_0) - f(x^*) \right]
+\end{equation}
+\end{theorem}
 
-\subsection{Tốc độ hội tụ và chi phí}
-
-Mối quan hệ giữa tốc độ hội tụ lý thuyết và chi phí thực thi thực tế của GD đã được Johnson và Zhang \cite{johnson2013accelerating} tóm tắt một cách cô đọng. Đối với hàm mục tiêu lồi mạnh và trơn Lipschitz, sai số tại bước lặp $t$ của GD tuân theo quy luật suy giảm hàm mũ dạng:
+Mối quan hệ giữa tốc độ hội tụ lý thuyết và chi phí thực thi thực tế của GD đã được Johnson và Zhang \cite{johnson2013accelerating} tóm tắt. Đối với hàm mục tiêu lồi mạnh và trơn Lipschitz, sai số tại bước lặp $t$ của GD tuân theo quy luật suy giảm hàm mũ dạng:
 \begin{equation}
 P(w_t) - P(w^*) \le \mathcal{O}\left(\left(1 - \frac{\gamma}{L}\right)^t\right)
 \end{equation}
-Trong đó $\gamma$ là hằng số lồi mạnh và $L$ là hằng số trơn Lipschitz. Tỷ số $\gamma/L$ liên quan mật thiết đến số điều kiện (condition number) của bài toán. 
+Trong đó $\gamma$ là hằng số lồi mạnh và $L$ là hằng số trơn Lipschitz. Tỷ số $\gamma/L$ liên quan mật thiết đến số điều kiện (condition number) của bài toán.
 
-Mặc dù sở hữu tốc độ hội tụ tuyến tính lý tưởng về số vòng lặp, GD lại gặp phải một rào cản chí mạng về mặt chi phí tính toán khi đối mặt với dữ liệu quy mô lớn. Do hàm mục tiêu trong học máy được cấu thành từ tổng của $n$ hàm thành phần (tương ứng với $n$ mẫu dữ liệu), việc tính toán gradient toàn cục $\nabla P(w) = \frac{1}{n}\sum_{i=1}^n \nabla \psi_i(w)$ bắt buộc thuật toán phải duyệt qua toàn bộ tập huấn luyện. Hệ quả là chi phí máy tính cho mỗi bước cập nhật đơn lẻ đạt mức độ phức tạp $\mathcal{O}(n)$. Khi $n$ tiến đến hàng triệu hoặc hàng tỷ mẫu, một bước lặp của GD trở nên cực kỳ chậm chạp và không khả thi trong môi trường tính toán hạn hẹp.
+Mặc dù sở hữu tốc độ hội tụ tuyến tính lý tưởng về số vòng lặp, GD lại gặp phải một rào cản chí mạng về mặt chi phí tính toán khi đối mặt với dữ liệu quy mô lớn. Do hàm mục tiêu trong học máy được cấu thành từ tổng của $n$ hàm thành phần (tương ứng với $n$ mẫu dữ liệu), việc tính toán gradient toàn cục $\nabla P(w) = \frac{1}{n}\sum_{i=1}^n \nabla \psi_i(w)$ bắt buộc thuật toán phải duyệt qua toàn bộ tập huấn luyện. Hệ quả là chi phí máy tính cho mỗi bước cập nhật đơn lẻ đạt mức độ phức tạp $\mathcal{O}(n)$, khiến GD không khả thi cho các bài toán với $n$ lên đến hàng triệu hoặc hàng tỷ mẫu.
 
 \section{Stochastic Gradient Descent (SGD) cổ điển}
 
 Để phá vỡ thế bế tắc về mặt chi phí $\mathcal{O}(n)$ của GD, phương pháp Trượt Gradient Ngẫu nhiên (Stochastic Gradient Descent - SGD) đã được phát triển như một giải pháp thay thế hiệu quả cho các bài toán học máy quy mô lớn.
 
-\subsection{Cập nhật SGD và tính không chệch}
-
-Theo phân tích của Bottou \cite{bottou2010large}, thay vì tiêu tốn chi phí để tính toán gradient trên toàn bộ hằng hà sa số các mẫu dữ liệu, SGD tối giản hóa khối lượng công việc bằng cách lựa chọn ngẫu nhiên một mẫu dữ liệu đơn lẻ $i_t \in \{1, \dots, n\}$ tại mỗi bước lặp $t$. Quy tắc cập nhật tham số của SGD được thực hiện dựa trên công thức:
-\begin{equation}
+\begin{definition}[Quy tắc cập nhật Stochastic Gradient Descent]
+\label{def:sgd_update}
+Cho hàm mục tiêu $P(w) = \frac{1}{n}\sum_{i=1}^n \psi_i(w)$. Quy tắc cập nhật của SGD tại bước lặp $t$ được xác định bởi:
+\begin{equation}\label{eq:sgd_update_rule}
 w_{t+1} = w_t - \eta_t \nabla \psi_{i_t}(w_t)
 \end{equation}
-Trong đó $\eta_t$ là hệ số bước học tại thời điểm $t$, và $\nabla \psi_{i_t}(w_t)$ là gradient của hàm mất mát tính riêng cho mẫu ngẫu nhiên $i_t$.
+trong đó $\eta_t$ là hệ số bước học tại thời điểm $t$, và $i_t \in \{1, \dots, n\}$ là chỉ số mẫu được lấy ngẫu nhiên đều từ tập huấn luyện.
+\end{definition}
 
-Cơ sở toán học vững chắc giúp giải thuật này hoạt động chính xác dựa trên tính không chệch (unbiased property) của ước lượng gradient ngẫu nhiên. Như Johnson và Zhang \cite{johnson2013accelerating} đã làm rõ, khi lấy kỳ vọng điều kiện theo chỉ số mẫu ngẫu nhiên $i_t$ dựa trên các trạng thái trước đó, ta thu được:
+\begin{proposition}[Tính không chệch của ước lượng SGD]
+\label{prop:sgd_unbiased}
+Với chỉ số mẫu $i_t$ được lấy ngẫu nhiên đều từ $\{1, \dots, n\}$, ước lượng gradient $\nabla \psi_{i_t}(w_t)$ là không chệch (unbiased), nghĩa là:
 \begin{equation}
 \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(w_t) \right] = \frac{1}{n} \sum_{i=1}^n \nabla \psi_i(w_t) = \nabla P(w_t)
 \end{equation}
-Bất đẳng thức trên chứng minh rằng, mặc dù vectơ gradient ngẫu nhiên tại một bước lặp cụ thể có thể sai lệch đáng kể, nhưng tính trung bình trên phương diện thống kê, nó hoàn toàn trùng khớp với vectơ gradient toàn cục chính xác. Do đó, độ phức tạp tính toán cho mỗi bước lặp được giảm từ $\mathcal{O}(n)$ xuống mức cố định $\mathcal{O}(1)$, độc lập với kích thước tập dữ liệu.
+\end{proposition}
 
-\subsection{Hội tụ với bước học giảm dần}
+Tính không chệch này đảm bảo rằng, mặc dù vectơ gradient ngẫu nhiên tại một bước lặp cụ thể có thể sai lệch đáng kể, nhưng tính trung bình trên phương diện thống kê, nó hoàn toàn trùng khớp với vectơ gradient toàn cục chính xác. Do đó, độ phức tạp tính toán cho mỗi bước lặp được giảm từ $\mathcal{O}(n)$ xuống mức cố định $\mathcal{O}(1)$, độc lập với kích thước tập dữ liệu.
 
-Mặc dù có kỳ vọng không chệch, tính ngẫu nhiên cao của việc lấy mẫu đơn lẻ khiến SGD phải gánh chịu một lượng nhiễu phương sai rất lớn. Để đảm bảo thuật toán có thể hội tụ về đúng điểm tối ưu thay vì dao động vô hạn xung quanh mục tiêu, hệ số bước học $\eta_t$ không thể giữ nguyên ở mức hằng số mà phải suy giảm dần theo tiến trình thời gian.
-
-Bottou \cite{bottou2010large} chỉ ra rằng chuỗi bước học $\eta_t$ bắt buộc phải tuân thủ nghiêm ngặt các điều kiện Robbins-Monro kinh điển của lý thuyết xấp xỉ ngẫu nhiên:
+\begin{assumption}[Điều kiện Robbins-Monro]
+\label{ass:robbins_monro}
+Để đảm bảo SGD hội tụ, chuỗi bước học $\eta_t$ phải thỏa mãn các điều kiện sau:
 \begin{equation}
 \sum_{t=1}^\infty \eta_t = \infty \quad \text{và} \quad \sum_{t=1}^\infty \eta_t^2 < \infty
 \end{equation}
-Điều kiện thứ nhất ($\sum \eta_t = \infty$) đảm bảo tổng các bước đi đủ lớn để thuật toán có thể vượt qua mọi khoảng cách và chạm đến nghiệm tối ưu từ bất kỳ điểm khởi đầu nào. Trong khi đó, điều kiện thứ hai ($\sum \eta_t^2 < \infty$) đảm bảo tốc độ thu nhỏ của bước học đủ nhanh để triệt tiêu năng lượng nhiễu tích lũy từ các gradient ngẫu nhiên.
+\end{assumption}
 
-Tuy nhiên, việc bắt buộc phải giảm dần bước học về mức không đã kéo theo một hệ lụy nghiêm trọng về hiệu năng. Schmidt và các cộng sự \cite{schmidt2017minimizing} đã tổng kết rằng, ngay cả đối với các hàm mục tiêu lồi mạnh, việc sử dụng các chiến lược bước học suy giảm (chẳng hạn như $\eta_t = \mathcal{O}(1/t)$) khiến tốc độ hội tụ của SGD bị kéo lùi về mức dưới tuyến tính $\mathcal{O}(1/k)$. Đây là một sự sụt giảm hiệu năng lý thuyết rất lớn khi so sánh với tốc độ hội tụ tuyến tính (hàm mũ) của GD truyền thống.
+Điều kiện thứ nhất ($\sum \eta_t = \infty$) đảm bảo tổng các bước đi đủ lớn để thuật toán có thể vượt qua mọi khoảng cách và chạm đến nghiệm tối ưu từ bất kỳ điểm khởi đầu nào. Điều kiện thứ hai ($\sum \eta_t^2 < \infty$) đảm bảo tốc độ thu nhỏ của bước học đủ nhanh để triệt tiêu năng lượng nhiễu tích lũy từ các gradient ngẫu nhiên.
+
+\begin{theorem}[Hội tụ dưới tuyến tính của SGD]
+\label{thm:sgd_sublinear}
+Dưới các giả thiết thích hợp (hàm lồi, gradient Lipschitz) và điều kiện Robbins-Monro \ref{ass:robbins_monro}, SGD đạt tốc độ hội tụ dưới tuyến tính:
+\begin{equation}
+\mathbb{E}[P(w_k) - P(w^*)] = \mathcal{O}(1/k)
+\end{equation}
+Ngay cả đối với hàm lồi mạnh, SGD cũng không thể đạt tốc độ hội tụ tuyến tính.
+\end{theorem}
 
 \subsection{Nguyên nhân căn bản của hội tụ chậm: phương sai không suy giảm}
 
-Để tìm ra giải pháp cải tiến hiệu quả, việc làm rõ nguyên nhân gốc rễ dẫn đến tốc độ hội tụ chậm chạp của SGD là điều tối quan trọng. Johnson và Zhang \cite{johnson2013accelerating} đã đưa ra một phân tích định lượng sâu sắc về hiện tượng này. Trong phương pháp GD cổ điển, khi vectơ tham số $w_t$ tiến sát đến nghiệm tối ưu toàn cục $w^*$, gradient toàn cục sẽ tự động triệt tiêu về mức không ($\nabla P(w_t) \to 0$), giúp thuật toán dừng lại một cách tự nhiên và chính xác. 
+Để tìm ra giải pháp cải tiến hiệu quả, việc làm rõ nguyên nhân gốc rễ dẫn đến tốc độ hội tụ chậm chạp của SGD là điều tối quan trọng.
 
-Ngược lại, đối với SGD, khi thuật toán đã tiệm cận hoặc thậm chí nằm ngay tại điểm tối ưu $w^*$, gradient của từng hàm thành phần riêng lẻ $\nabla \psi_{i_t}(w^*)$ nhìn chung vẫn là các vectơ khác không. Do đó, lượng phương sai ngẫu nhiên:
+\begin{definition}[Phương sai của ước lượng gradient]
+\label{def:gradient_variance}
+Phương sai của ước lượng gradient trong SGD được định nghĩa là:
 \begin{equation}
-\mathbb{E} \left[ \|\nabla \psi_{i_t}(w_t) - \nabla P(w_t)\|^2 \right]
+\operatorname{Var}(\nabla \psi_{i_t}(w_t)) := \mathbb{E} \left[ \|\nabla \psi_{i_t}(w_t) - \nabla P(w_t)\|^2 \right]
 \end{equation}
-không hề bị triệt tiêu mà duy trì ở một mức hằng số cố định xuyên suốt tiến trình. Lượng phương sai không suy giảm này liên tục đẩy tham số ra xa khỏi nghiệm, buộc người dùng phải ép bước học $\eta_t$ tiến dần về 0 để duy trì sự ổn định. Khi bước học trở nên quá nhỏ, tốc độ dịch chuyển của thuật toán bị đình trệ, dẫn đến hiện tượng thắt nút cổ chai hội tụ dưới tuyến tính. Bottou \cite{bottou2010large} cũng nhấn mạnh nhiễu phương sai này chính là rào cản cốt lõi, hạn chế khả năng đạt được các nghiệm có độ chính xác cao của hệ thống SGD tiêu chuẩn.
+\end{definition}
 
-\subsection{Tổng kết đánh đổi giữa GD và SGD}
-
-Sự khác biệt mang tính bản chất giữa hai trường phái tối ưu hóa này được thể hiện rõ nét nhất qua lăng kính phân tích sự đánh đổi (trade-offs) định lượng tại Bảng 2 trong nghiên cứu kinh điển của Bottou \cite{bottou2010large}. Phân tích này so sánh chi phí thời gian tính toán và số lượng vòng lặp cần thiết để cả hai thuật toán đạt được một mức sai số mục tiêu $\rho$ cho trước.
-
-\begin{itemize}
-    \item \textbf{Về số vòng lặp (Iteration Complexity):} Để đạt độ chính xác cao (tức $\rho$ rất nhỏ), GD chiếm ưu thế tuyệt đối nhờ tốc độ hội tụ tuyến tính, chỉ yêu cầu số bước lặp ở mức hằng số nhân với $\log(1/\rho)$. Trong khi đó, do dính nhiễu phương sai, SGD yêu cầu một số lượng vòng lặp khổng lồ ở mức tỷ lệ nghịch $\mathcal{O}(1/\rho)$.
-    \item \textbf{Về chi phí thời gian (Time Complexity):} Do chi phí mỗi bước của GD phụ thuộc tuyến tính vào kích thước mẫu $n$, tổng thời gian tính toán của nó bị kéo giãn theo quy mô $\mathcal{O}(n \log(1/\rho))$. Ngược lại, chi phí mỗi bước của SGD là hằng số $\mathcal{O}(1)$, khiến tổng thời gian thực thi của nó chỉ ở mức $\mathcal{O}(1/\rho)$, hoàn toàn độc lập với kích thước của tập dữ liệu huấn luyện $n$.
-\end{itemize}
-
-Sự đánh đổi này đưa đến một kết luận thực tiễn quan trọng: Trên các tập dữ liệu lớn ($n$ cực kỳ lớn) và trong các bài toán học máy quy mô công nghiệp nơi thời gian tính toán là tài nguyên bị giới hạn, SGD tỏ ra vượt trội hơn GD rất nhiều trong giai đoạn đầu để nhanh chóng tìm ra một nghiệm xấp xỉ hợp lý. Tuy nhiên, nếu ứng dụng đòi hỏi một nghiệm có độ chính xác cao, SGD sẽ bộc lộ nhược điểm và tốn rất nhiều thời gian ở giai đoạn sau. Sự thấu hiểu sâu sắc về mối quan hệ đánh đổi này chính là động lực trực tiếp dẫn dắt các nhà nghiên cứu đến với cuộc cách mạng tiếp theo: phát triển lớp thuật toán thu gọn phương sai (như SVRG) nhằm tích hợp hoàn hảo ưu điểm tốc độ của SGD và khả năng hội tụ nhanh của GD.
-
-\section{Bài toán tối thiểu hóa tổng hữu hạn (Finite Sum Minimization)}
-
-Trong các ứng dụng học máy và thống kê hiện đại, phần lớn các bài toán huấn luyện mô hình có giám sát đều được mô tả dưới dạng toán học của bài toán tối thiểu hóa tổng hữu hạn (Finite Sum Minimization). Theo định nghĩa kinh điển của Le Roux và các cộng sự \cite{leroux2012stochastic}, bài toán tối ưu hóa cốt lõi này hướng tới việc tìm kiếm một vectơ tham số nhằm tối thiểu hóa một hàm mục tiêu tổng thể $g(x)$ được cấu thành từ trung bình của $n$ hàm thành phần:
-\begin{equation}\label{eq:finite_sum_g}
-\min_{x \in \mathbb{R}^p} g(x) := \frac{1}{n} \sum_{i=1}^n f_i(x)
-\end{equation}
-Trong ngữ cảnh học máy quy mô lớn, Johnson và Zhang \cite{johnson2013accelerating} đã cụ thể hóa cấu trúc cấu thành này thông qua mô hình Tối thiểu hóa rủi ro thực nghiệm (Empirical Risk Minimization - ERM). Giả sử mô hình được huấn luyện trên một tập dữ liệu gồm $n$ mẫu độc lập, bài toán tối ưu tổng quát được viết dưới dạng biểu thức sau:
-\begin{equation}\label{eq:finite_sum_p}
-\min_{w \in \mathbb{R}^d} P(w) := \frac{1}{n} \sum_{i=1}^n \psi_i(w)
-\end{equation}
-Trong biểu thức (\ref{eq:finite_sum_p}), $w$ đại diện cho vectơ trọng số (hoặc tham số) của mô hình cần tối ưu hóa nằm trong không gian $d$ chiều. Mỗi hàm thành phần $\psi_i(w)$ biểu thị hàm mất mát (loss function) được tính toán riêng biệt cho mẫu dữ liệu huấn luyện thứ $i$, đo lường sai số giữa dự báo của mô hình và nhãn thực tế. Ví dụ, trong bài toán hồi quy tuyến tính sử dụng bình phương tối thiểu, ta có $\psi_i(w) = (w^T x_i - y_i)^2$; đối với bài toán hồi quy Logistic lồi mạnh, hàm thành phần thường tích hợp thêm số hạng chỉnh hóa dạng $\psi_i(w) = \frac{\lambda}{2}\|w\|^2 + \log(1 + \exp(-y_i w^T x_i))$ \cite{leroux2012stochastic}.
-
-Đặc trưng cơ bản của cấu trúc tổng hữu hạn trong kỷ nguyên dữ liệu lớn là kích thước tập mẫu $n$ thường vô cùng lớn, vượt xa số chiều tham số $d$. Sự phụ thuộc trực tiếp của các phương pháp tính gradient toàn cục (GD) vào kích thước $n$ tạo ra rào cản lớn về mặt chi phí tính toán tại mỗi bước lặp, trong khi tính chất ngẫu nhiên độc lập của các hàm thành phần $\psi_i$ lại chính là cơ sở toán học cho phép các thuật toán ngẫu nhiên (SGD) khai thác thông tin từ các mẫu ngẫu nhiên đơn lẻ để đại diện cho toàn bộ hệ thống dữ liệu một cách hiệu quả.
-
-\section{Các thuật toán tiên phong giảm phương sai}
-
-Mâu thuẫn giữa chi phí tính toán cao của GD và sự sụt giảm hiệu năng lý thuyết ở giai đoạn sau của SGD do nhiễu phương sai cố định đã thúc đẩy sự ra đời của một lớp thuật toán tối ưu hóa ngẫu nhiên cải tiến. Như Allen-Zhu \cite{allen2017katyusha} đã nhận định, sự ra đời của các phương pháp này đã chính thức mở ra "Kỷ nguyên thứ hai" (The Second Era) của tối ưu hóa ngẫu nhiên, nơi các kỹ thuật thu gọn phương sai (Variance Reduction - VR) cho phép thuật toán vừa duy trì được chi phí tính toán cố định $\mathcal{O}(1)$ trên mỗi bước như SGD, vừa khôi phục được tốc độ hội tụ tuyến tính lý tưởng của GD truyền thống đối với các hàm lồi mạnh.
-
-\subsection{SAG (Stochastic Average Gradient)}
-
-Thuật toán mở đường cho cuộc cách mạng giảm phương sai này là Stochastic Average Gradient (SAG), được đề xuất ban đầu trong nghiên cứu mang tính bước ngoặt của Le Roux và các cộng sự \cite{leroux2012stochastic}. Ý tưởng cốt lõi của SAG nhằm đạt được tốc độ hội tụ nhanh mà không cần tính toán lại gradient toàn phần một cách thủ công tại mỗi bước là việc tích hợp một cơ chế quản lý bộ nhớ thông minh để lưu trữ các giá trị gradient cũ.
-
-Trong cấu trúc của SAG, thuật toán duy trì một bảng bộ nhớ chứa $n$ vectơ gradient, ký hiệu là $y_i^t \in \mathbb{R}^d$ tại bước lặp $t$, tương ứng với từng hàm thành phần $f_i$. Tại mỗi vòng lặp $t$, thuật toán chỉ lựa chọn ngẫu nhiên một chỉ số mẫu dữ liệu $i_t \in \{1, \dots, n\}$ để tính toán gradient mới và tiến hành cập nhật giá trị trong bảng bộ nhớ theo quy tắc:
+\begin{proposition}[Phương sai không triệt tiêu]
+\label{prop:variance_not_zero}
+Trong phương pháp GD cổ điển, khi $w_t \to w^*$, ta có $\nabla P(w_t) \to 0$. Tuy nhiên, đối với SGD, ngay cả khi $w_t = w^*$, các gradient thành phần $\nabla \psi_i(w^*)$ nhìn chung vẫn khác không. Do đó:
 \begin{equation}
-y_i^{t+1} = \begin{cases} \nabla f_{i_t}(x_t) & \text{nếu } i = i_t \\ y_i^t & \text{nếu } i \neq i_t \end{cases}
+\lim_{t \to \infty} \operatorname{Var}(\nabla \psi_{i_t}(w_t)) > 0
 \end{equation}
-Hướng dịch chuyển tiếp theo của vectơ tham số được xác định bằng giá trị trung bình của toàn bộ các vectơ gradient đang được lưu giữ trong bảng lưu trữ lịch sử:
-\begin{equation}
-x_{t+1} = x_t - \frac{\eta}{n} \sum_{i=1}^n y_i^{t+1}
-\end{equation}
-Nhờ cơ chế này, hướng cập nhật của SAG luôn tổng hợp được tri thức toàn cục từ toàn bộ các mẫu dữ liệu qua các bước lặp trước đó. Phân tích hội tụ chi tiết trong Mục 3 của Le Roux \cite{leroux2012stochastic} chỉ ra rằng, cơ chế này giúp thu gọn phương sai của ước lượng gradient một cách tự động khi thuật toán tiến sát về phía nghiệm tối ưu. Hệ quả là SAG trở thành giải thuật ngẫu nhiên đầu tiên đạt được tốc độ hội tụ tuyến tính dạng $\mathcal{O}(\rho^k)$ cho lớp bài toán tổng hữu hạn lồi mạnh.
+nghĩa là phương sai của ước lượng gradient không triệt tiêu mà duy trì ở một mức hằng số dương.
+\end{proposition}
 
-Trong các nghiên cứu tổng quan và mở rộng sau đó, Schmidt và các cộng sự \cite{schmidt2017minimizing} đã cung cấp một cái nhìn toàn diện hơn về SAG, thiết lập các chứng minh toán học chỉ ra thuật toán đạt tốc độ $\mathcal{O}(1/k)$ cho các hàm lồi trơn tổng quát và đề xuất các chiến lược lấy mẫu không đồng đều (non-uniform sampling) nhằm tối ưu hóa hiệu năng thực tế. Mặc dù sở hữu những đặc tính lý thuyết xuất sắc, nhược điểm chí mạng của SAG chính là yêu cầu nghiêm ngặt về không gian lưu trữ bộ nhớ lên đến mức $\mathcal{O}(n \times d)$, khiến nó gặp rào cản lớn khi triển khai thực tiễn trên các hệ thống có quy mô dữ liệu khổng lồ.
+Lượng phương sai không suy giảm này liên tục đẩy tham số ra xa khỏi nghiệm, buộc người dùng phải ép bước học $\eta_t$ tiến dần về 0 để duy trì sự ổn định. Khi bước học trở nên quá nhỏ, tốc độ dịch chuyển của thuật toán bị đình trệ, dẫn đến hiện tượng thắt nút cổ chai hội tụ dưới tuyến tính.
 
-\subsection{SAGA}
-
-Nhằm khắc phục các hạn chế về mặt lý thuyết của SAG, đặc biệt là tính chệch (bias) của ước lượng gradient trong cấu trúc của SAG khiến nó khó mở rộng cho các bài toán chứa thành phần không trơn, thuật toán SAGA đã được phát triển. SAGA kết hợp hài hòa ý tưởng lưu trữ lịch sử gradient của SAG và nguyên lý thiết lập ước lượng không chệch của các kỹ thuật giảm phương sai hiện đại \cite{allen2017katyusha}.
-
-Theo mô tả tổng quan của Driggs và các cộng sự \cite{driggs2022accelerating}, tương tự như SAG, SAGA duy trì một bảng bộ nhớ chứa $n$ gradient cũ của các hàm thành phần, ký hiệu là $y_i^t$. Tại bước lặp $t$, một mẫu $i_t$ được chọn ngẫu nhiên từ tập dữ liệu, và quy tắc cập nhật tham số của SAGA được thực hiện thông qua công thức hiệu chỉnh phương sai hiển thị sau:
-\begin{equation}\label{eq:saga_update}
-w_{t+1} = w_t - \eta \left( \nabla \psi_{i_t}(w_t) - y_{i_t}^t + \frac{1}{n} \sum_{i=1}^n y_i^t \right)
-\end{equation}
-Ngay sau bước cập nhật tham số $w_{t+1}$, giá trị gradient trong bộ nhớ tại vị trí $i_t$ sẽ được thay thế bằng giá trị vừa tính toán mới: $y_{i_t}^{t+1} = \nabla \psi_{i_t}(w_t)$, trong khi thông tin của các mẫu khác được giữ nguyên.
-
-Điểm ưu việt mang tính bản chất của công thức cập nhật (\ref{eq:saga_update}) nằm ở chỗ hướng trượt được hiệu chỉnh là một ước lượng hoàn toàn không chệch (unbiased estimator) của gradient toàn cục tại bước hiện tại, nghĩa là kỳ vọng toán học của nó thỏa mãn $\mathbb{E}_{i_t} [v_t] = \nabla P(w_t)$. Tính chất không chệch này giúp SAGA sở hữu các chứng minh toán học tường minh và trực quan hơn rất nhiều so với SAG. Hơn nữa, nó cho phép thuật toán dễ dàng tích hợp toán tử tiệm cận (proximal operator) nhằm giải quyết các bài toán tối ưu hóa hỗn hợp lồi không trơn hoặc lồi không mạnh một cách hiệu quả \cite{driggs2022accelerating}. Tuy nhiên, do vẫn dựa trên cấu trúc bảng lưu trữ toàn bộ lịch sử gradient, SAGA vẫn phải gánh chịu chi phí bộ nhớ lớn ở mức $\mathcal{O}(n \times d)$, tạo nên động lực mạnh mẽ để cộng đồng nghiên cứu hướng tới thuật toán SVRG—một giải pháp triệt tiêu hoàn toàn gánh nặng bộ nhớ này bằng cơ chế điểm chụp định kỳ.
+Trên các tập dữ liệu lớn ($n$ cực kỳ lớn) và trong các bài toán học máy quy mô công nghiệp nơi thời gian tính toán là tài nguyên bị giới hạn, SGD tỏ ra vượt trội hơn GD rất nhiều trong giai đoạn đầu để nhanh chóng tìm ra một nghiệm xấp xỉ hợp lý. Tuy nhiên, nếu ứng dụng đòi hỏi một nghiệm có độ chính xác cao, SGD sẽ bộc lộ nhược điểm và tốn rất nhiều thời gian ở giai đoạn sau. Sự thấu hiểu sâu sắc về mối quan hệ đánh đổi này chính là động lực trực tiếp dẫn dắt các nhà nghiên cứu đến với cuộc cách mạng tiếp theo: phát triển lớp thuật toán thu gọn phương sai (như SVRG) nhằm tích hợp hoàn hảo ưu điểm tốc độ của SGD và khả năng hội tụ nhanh của GD.
+% \end{document}

@@ -35,6 +35,7 @@
 \usepackage{algorithm}
 \usepackage{algpseudocode} 
 \usepackage[ruled,vlined,linesnumbered]{algorithm2e}
+\newtheorem{assumption}{Giả thiết}[section]
 
 % === CẤU HÌNH HEADER/FOOTER ===
 \pagestyle{fancy}
@@ -81,14 +82,14 @@
 
 \frontmatter
 \input{Bia}
-\chapter*{Lời mở đầu}
+% \chapter*{Lời mở đầu}
 \input{lmd}
 
 \mainmatter
 \tableofcontents
 
 % === NÊN ĐẶT BẢNG KÝ HIỆU Ở ĐÂY ===
-\printnomenclature*[2.5cm]  % Sau mục lục, trước list of figures
+\printnomenclature*  % Sau mục lục, trước list of figures
 
 \listoffigures
 \listoftables
@@ -99,8 +100,8 @@
 \input{chuong3}
 \input{thucngiem}
 
-\chapter*{Kết luận}
-\addcontentsline{toc}{chapter}{Kết luận}
+% \chapter*{Kết luận}
+% \addcontentsline{toc}{chapter}{Kết luận}
 \input{ketluan}
 
 \backmatter

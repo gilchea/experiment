@@ -1,143 +1,215 @@
-\chapter{Phương pháp tăng tốc SGD bằng thu gọn phương sai dự báo}
+\chapter{Phương pháp trượt Gradient ngẫu nhiên tăng cường sử dụng phép thu gọn phương sai dự báo}
 
-\section{Động lực và ý tưởng chính của Predictive Variance Reduction}
 
-Như đã phân tích ở Chương 2, rào cản cốt lõi khiến phương pháp trượt gradient ngẫu nhiên (SGD) cổ điển không thể đạt được tốc độ hội tụ nhanh là do sự tồn tại của nhiễu phương sai cố định, không tự động suy giảm khi chuỗi tham số tiến gần về phía nghiệm tối ưu. Để khắc phục triệt để điểm thắt nút cổ chai này mà không làm gia tăng không gian lưu trữ bộ nhớ khổng lồ như các phương pháp SAG hay SAGA, Johnson và Zhang \cite{johnson2013accelerating} đã đề xuất một cơ chế đột phá mang tên Kỹ thuật thu gọn phương sai dự báo (Predictive Variance Reduction). Ý tưởng trung tâm của kỹ thuật này là sử dụng thông tin gradient toàn cục tại một điểm chụp cố định trong quá khứ để làm mốc dự báo, từ đó hiệu chỉnh hướng trượt ngẫu nhiên ở hiện tại, ép phương sai của ước lượng tiến dần về mức không một cách tự nhiên.
 
-\subsection{Ước lượng gradient hiệu chỉnh}
+Trong chương này, chúng tôi trình bày chi tiết công trình của Johnson và Zhang \cite{johnson2013accelerating} về thuật toán SVRG (Stochastic Variance Reduced Gradient) – phương pháp tăng tốc SGD dựa trên kỹ thuật thu gọn phương sai dự báo. Các phân tích, định lý và chứng minh dưới đây được xây dựng dựa trên kết quả nguyên bản từ bài báo này.
 
-Để hiện thực hóa ý tưởng trên, thuật toán Stochastic Variance Reduced Gradient (SVRG) được thiết kế dựa trên một cấu trúc hai vòng lặp lồng nhau (dual-loop framework). Theo nghiên cứu nguyên bản của Johnson và Zhang \cite{johnson2013accelerating}, tại khởi đầu của mỗi chu kỳ (epoch) lớn, thuật toán tiến hành giữ lại một điểm chụp (snapshot), ký hiệu là $\tilde{w}$. Tại điểm chụp này, thuật toán thực hiện tính toán một vectơ gradient toàn phần chính xác (full gradient) trên toàn bộ tập dữ liệu huấn luyện:
+
+
+\section{Động lực}
+
+
+
+Như đã phân tích ở Chương 2, rào cản cốt lõi khiến phương pháp SGD không thể đạt được tốc độ hội tụ nhanh là do sự tồn tại của nhiễu phương sai cố định. Để khắc phục điểm thắt nút cổ chai này mà không làm gia tăng không gian lưu trữ bộ nhớ khổng lồ (như SAG hay SAGA) các tác giả \cite{johnson2013accelerating} đã đề xuất một cơ chế có tên là thu gọn phương sai dự báo (Predictive Variance Reduction). Ý tưởng trung tâm của phương này là sử dụng gradient toàn cục tại một điểm chụp cố định trong quá khứ để làm mốc dự báo, từ đó hiệu chỉnh hướng trượt ngẫu nhiên ở hiện tại, ép phương sai của ước lượng tiến dần về mức tối thiểu một cách tự nhiên.
+
+
+
+% \section{Ước lượng gradient hiệu chỉnh}
+
+
+
+Phương pháp SVRG được thiết kế dựa trên một cấu trúc hai vòng lặp lồng nhau. Tại khởi đầu của mỗi chu kỳ (epoch) lớn, tiến hành giữ lại một điểm chụp (snapshot), ký hiệu là $\tilde{w}$. Tại điểm chụp này, thuật toán thực hiện tính toán một vectơ gradient toàn phần (full gradient) trên toàn bộ tập dữ liệu huấn luyện:
+
 \begin{equation}
-\nabla P(\tilde{w}) = \frac{1}{n} \sum_{i=1}^n \nabla \psi_i(\tilde{w})
+\tilde{\mu} = \nabla P(\tilde{w}) = \frac{1}{n} \sum_{i=1}^n \nabla \psi_i(\tilde{w})
 \end{equation}
-Vectơ $\nabla P(\tilde{w})$ sau đó được lưu trữ cố định để làm thông tin tham chiếu xuyên suốt vòng lặp ngẫu nhiên nội bộ của chu kỳ đó. 
 
-Tại mỗi bước lặp ngẫu nhiên $t$ bên trong chu kỳ, thay vì chỉ sử dụng trực tiếp vectơ gradient ngẫu nhiên độc lập $\nabla \psi_{i_t}(w_{t-1})$ thu được từ một mẫu dữ liệu $i_t \in \{1, \dots, n\}$ chọn ngẫu nhiên như SGD, SVRG thiết lập một công thức hiệu chỉnh gradient hiển thị (explicitly modified gradient estimator) theo quy tắc cập nhật sau \cite{johnson2013accelerating}:
+Vectơ $\tilde{\mu}$ sau đó được lưu trữ cố định để làm thông tin tham chiếu xuyên suốt vòng lặp ngẫu nhiên nội bộ của chu kỳ đó. 
+
+
+Tại mỗi bước lặp ngẫu nhiên $t$ bên trong chu kỳ, thay vì chỉ sử dụng trực tiếp vectơ gradient ngẫu nhiên độc lập $\nabla \psi_{i_t}(w_{t-1})$ như SGD, SVRG thiết lập một công thức hiệu chỉnh gradient hiển thị (explicitly modified gradient estimator) theo quy tắc cập nhật sau:
+
 \begin{equation}\label{eq:svrg_estimator}
-v_t = \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \nabla P(\tilde{w})
+v_t = \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \tilde{\mu}
 \end{equation}
+
 Vectơ $v_t$ định hình hướng trượt mới cho tham số: $w_t = w_{t-1} - \eta v_t$. Trong công thức (\ref{eq:svrg_estimator}), số hạng $\nabla \psi_{i_t}(\tilde{w})$ biểu thị giá trị gradient của riêng mẫu $i_t$ được đánh giá lại tại vị trí điểm chụp quá khứ $\tilde{w}$. Sự kết hợp của bộ ba thành phần này tạo nên một cơ chế bù trừ nhiễu động lực học vô cùng tinh gọn.
 
-\subsection{Tính không chệch}
+% \subsection{Tính không chệch}
 
 Một yêu cầu tiên quyết đối với bất kỳ ước lượng ngẫu nhiên nào trong tối ưu hóa xấp xỉ là phải đảm bảo tính không chệch (unbiased property) để hướng dịch chuyển trung bình của thuật toán không bị lệch khỏi quỹ đạo tối ưu. Johnson và Zhang \cite{johnson2013accelerating} đã chứng minh một cách tường minh rằng ước lượng gradient hiệu chỉnh $v_t$ hoàn toàn thỏa mãn đặc tính toán học này.
 
 Xét kỳ vọng điều kiện của vectơ $v_t$ tại bước lặp $t$, lấy theo chỉ số mẫu ngẫu nhiên $i_t$ và cố định toàn bộ lịch sử các bước lặp trước đó (ký hiệu điều kiện ngắn gọn là $\mathbb{E}_{i_t}$), ta có biến đổi đại số sau:
+
 \begin{align}
 \mathbb{E}_{i_t} \left[ v_t \right] &= \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \nabla P(\tilde{w}) \right] \\
 &= \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(w_{t-1}) \right] - \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(\tilde{w}) \right] + \nabla P(\tilde{w})
 \end{align}
+
 Do chỉ số $i_t$ được lấy mẫu ngẫu nhiên đều từ tập hợp $\{1, \dots, n\}$, theo định nghĩa của gradient toàn phần, ta thu được các biểu thức kỳ vọng thành phần:
+
 \begin{equation}
+
 \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(w_{t-1}) \right] = \nabla P(w_{t-1}) \quad \text{và} \quad \mathbb{E}_{i_t} \left[ \nabla \psi_{i_t}(\tilde{w}) \right] = \nabla P(\tilde{w})
+
 \end{equation}
+
 Thay thế các kết quả này ngược trở lại biểu thức tổng quát, hai số hạng chứa thông tin điểm chụp $\nabla P(\tilde{w})$ tự động triệt tiêu lẫn nhau:
+
 \begin{equation}
 \mathbb{E}_{i_t} \left[ v_t \right] = \nabla P(w_{t-1}) - \nabla P(\tilde{w}) + \nabla P(\tilde{w}) = \nabla P(w_{t-1})
 \end{equation}
-Chứng minh toán học ngắn gọn này xác nhận rằng, tại mỗi bước lặp ngẫu nhiên đơn lẻ, mặc dù thành phần cốt lõi được tính toán trên một mẫu dữ liệu, kỳ vọng toán học của ước lượng SVRG luôn trùng khớp một cách chính xác với vectơ gradient toàn cục $\nabla P(w_{t-1})$. Đặc tính này khẳng định SVRG giữ vững bản chất hình học của phương pháp trượt gradient, đồng thời tạo cơ sở cho các phân tích hội tụ chặt chẽ sau này.
 
-\subsection{Phương sai được thu gọn}
+Tại mỗi bước lặp ngẫu nhiên đơn lẻ, kỳ vọng toán học của ước lượng SVRG luôn trùng khớp với vectơ gradient toàn cục $\nabla P(w_{t-1})$. Đặc tính này khẳng định SVRG bản chất hình học của phương pháp trượt gradient, đồng thời tạo cơ sở cho các phân tích hội tụ.
+
+
+\section{Phương sai được thu gọn}
+
 
 Mặc dù có cùng kỳ vọng không chệch như SGD cổ điển, sự khác biệt mang tính cách mạng của SVRG nằm ở cấu trúc toán học của phương sai ước lượng. Phân tích định lượng của Johnson và Zhang \cite{johnson2013accelerating} chỉ ra rằng, đại lượng phương sai của ước lượng gradient $v_t$ được kiểm soát và thu hẹp dựa trên khoảng cách giữa điểm lặp hiện tại $w_{t-1}$ và điểm chụp $\tilde{w}$.
 
+
+
 Khi tiến trình tối ưu hóa diễn ra thành công, cả chuỗi tham số hiện tại $w_{t-1}$ và điểm chụp định kỳ $\tilde{w}$ đều hội tụ tiệm cận về phía nghiệm tối ưu toàn cục $w^*$. Tại lân cận của nghiệm tối ưu, do tính chất liên tục của các hàm thành phần, giá trị gradient ngẫu nhiên $\nabla \psi_{i_t}(w_{t-1})$ sẽ tiến sát về mặt giá trị đại số với $\nabla \psi_{i_t}(\tilde{w})$. Do đó, hiệu số giữa chúng sẽ triệt tiêu:
+
 \begin{equation}
 \left( \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) \right) \to 0
 \end{equation}
+
 Đồng thời, theo điều kiện tối ưu bậc một, gradient toàn cục tại điểm chụp cũng tiến về vectơ không: $\nabla P(\tilde{w}) \to 0$. Kết hợp các xu hướng này, lượng phương sai của ước lượng:
+
 \begin{equation}
 \text{Var}(v_t) = \mathbb{E}_{i_t} \left[ \|v_t - \nabla P(w_{t-1})\|^2 \right]
 \end{equation}
+
 sẽ tự động suy giảm và triệt tiêu hoàn toàn về 0 khi thuật toán tiệm cận nghiệm $w^*$. 
+
 
 Dưới góc nhìn tổng quan hiện đại, Driggs và các cộng sự \cite{driggs2022accelerating} đã làm rõ rằng kỹ thuật thu gọn phương sai (VR) thiết lập một cơ chế đảm bảo sai số bình phương trung bình (Mean Squared Error - MSE) của toán tử ước lượng gradient giảm dần theo cấp số nhân qua các chu kỳ huấn luyện. Việc triệt tiêu năng lượng nhiễu này giải phóng thuật toán khỏi sự kìm hãm của điều kiện Robbins-Monro, cho phép SVRG duy trì một hệ số bước học $\eta$ cố định (hằng số) xuyên suốt quá trình thực thi mà không sợ hiện tượng dao động phân kỳ, từ đó khôi phục thành công tốc độ hội tụ tuyến tính hàm mũ lý tưởng của GD.
 
-\subsection{Từ ý tưởng đến thuật toán}
 
-Để thấu hiểu sâu sắc cách thức chuyển đổi từ một ý tưởng lý thuyết thuần túy thành một thuật toán thực thi hiệu quả, Johnson và Zhang \cite{johnson2013accelerating} đã cung cấp một góc nhìn thông qua việc xây dựng một hàm mục tiêu phụ trợ (auxiliary function). Thay vì giải bài toán trên hàm mất mát gốc $\psi_i(w)$, tại mỗi chu kỳ với điểm chụp $\tilde{w}$ cố định, ta có thể xem xét việc áp dụng SGD truyền thống trên một lớp hàm số biến đổi mới, định nghĩa cho từng mẫu dữ liệu $i$ như sau:
+
+\section{Mô tả thuật toán}
+
+
+
+% \subsection{Từ ý tưởng đến thuật toán}
+
+
+
+Để hiểu cách thức chuyển đổi từ ý tưởng lý thuyết thành thuật toán, ta xây dựng góc nhìn thông qua việc xây dựng một hàm mục tiêu phụ trợ (auxiliary function). Thay vì giải bài toán trên hàm mất mát gốc $\psi_i(w)$, tại mỗi chu kỳ với điểm chụp $\tilde{w}$ cố định, ta xem xét một hàm số biến đổi mới, định nghĩa cho từng mẫu dữ liệu $i$ như sau:
+
 \begin{equation}
-\tilde{\psi}_i(w) := \psi_i(w) - \langle \nabla \psi_i(\tilde{w}) - \nabla P(\tilde{w}), w \rangle
+\tilde{\psi}_i(w) := \psi_i(w) - \langle \nabla \psi_i(\tilde{w}) - \tilde{\mu}, w \rangle
 \end{equation}
-Hàm phụ trợ $\tilde{\psi}_i(w)$ được thiết kế bằng cách bổ sung một số hạng tuyến tính vào hàm gốc. Khi tiến hành tính toán vectơ gradient của hàm phụ trợ này theo biến số $w$, ta thu được biểu thức:
+
+Hàm phụ trợ $\tilde{\psi}_i(w)$ được thiết kế bằng cách bổ sung một số hạng tuyến tính vào hàm gốc. Khi đó, gradient của nó là:
+
 \begin{equation}
-\nabla \tilde{\psi}_i(w) = \nabla \psi_i(w) - \nabla \psi_i(\tilde{w}) + \nabla P(\tilde{w})
+\nabla \tilde{\psi}_i(w) = \nabla \psi_i(w) - \nabla \psi_i(\tilde{w}) + \tilde{\mu}
 \end{equation}
-Biểu thức đạo hàm này trùng khớp hoàn toàn với công thức ước lượng gradient hiệu chỉnh $v_t$ của SVRG trong phương trình (\ref{eq:svrg_estimator}). 
 
-Hơn nữa, nếu lấy trung bình tổng thể của các hàm phụ trợ này trên toàn bộ tập dữ liệu, ta phát
+Biểu thức này trùng khớp hoàn toàn với công thức ước lượng gradient hiệu chỉnh $v_t$ trong (\ref{eq:svrg_estimator}).
 
-\subsection{Thuật toán SVRG}
 
-\subsubsection{Cấu trúc vòng lặp lồng}
 
-Cơ chế thu gọn phương sai dự báo được hiện thực hóa một cách tường minh thông qua cấu trúc thuật toán hai vòng lặp lồng nhau (dual-loop framework) vô cùng đặc trưng của SVRG. Theo thiết kế nguyên bản của Johnson và Zhang \cite{johnson2013accelerating}, giải thuật phân tách tiến trình tối ưu thành hai tầng xử lý bổ trợ nhau:
+Hơn nữa, do $\sum_{i=1}^n (\nabla \psi_i(\tilde{w}) - \tilde{\mu}) = 0$, nên trung bình của các hàm phụ trợ vẫn bằng hàm mục tiêu gốc:
+
+\begin{equation}
+\frac{1}{n} \sum_{i=1}^n \tilde{\psi}_i(w) = \frac{1}{n} \sum_{i=1}^n \psi_i(w) - \langle \frac{1}{n} \sum_{i=1}^n (\nabla \psi_i(\tilde{w}) - \tilde{\mu}), w \rangle = P(w)
+\end{equation}
+
+Do đó, áp dụng SGD trực tiếp lên cách biểu diễn mới $P(w) = \frac{1}{n}\sum_{i=1}^n \tilde{\psi}_i(w)$ sẽ thu được đúng cập nhật của SVRG, nhưng với lợi thế là gradient của $\tilde{\psi}_i(w)$ tại điểm tối ưu $w^*$ sẽ tiến dần về 0.
+
+\paragraph{Cấu trúc vòng lặp lồng}
+
+Cơ chế thu gọn phương sai dự báo được hiện thực hóa một cách tường minh thông qua cấu trúc thuật toán hai vòng lặp lồng nhau vô cùng đặc trưng của SVRG. Thuật toán phân tách tiến trình tối ưu thành hai tầng xử lý bổ trợ nhau:
 
 \begin{itemize}
+
     \item \textbf{Vòng lặp ngoài (Outer Loop):} Đại diện cho các chu kỳ lớn (epochs), được ký hiệu bằng chỉ số $s = 1, 2, \dots$. Tại khởi đầu của mỗi chu kỳ $s$, thuật toán thực hiện hai tác vụ then chốt. Thứ nhất, nó chụp lại trạng thái tham số hiện tại để thiết lập điểm chụp cố định $\tilde{w} = w_{s-1}$. Thứ hai, thuật toán duyệt qua toàn bộ $n$ mẫu dữ liệu của tập huấn luyện để tính toán và lưu trữ vectơ gradient toàn phần chính xác $\nabla P(\tilde{w})$. Chi phí tính toán tại vòng lặp ngoài đạt mức $\mathcal{O}(n)$, đóng vai trò xây dựng "bản đồ tri thức toàn cục" cho chu kỳ đó.
+
     \item \textbf{Vòng lặp trong (Inner Loop):} Hoạt động dựa trên thông tin tĩnh từ vòng lặp ngoài, thực thi một số lượng cố định $m$ bước cập nhật ngẫu nhiên độc lập (với chỉ số bước $t = 1, \dots, m$). Tại mỗi bước $t$, thuật toán lấy mẫu ngẫu nhiên một chỉ số $i_t$ để tính toán cặp gradient $\nabla \psi_{i_t}(w_{t-1})$ và $\nabla \psi_{i_t}(\tilde{w})$. Nhờ có sẵn giá trị $\nabla P(\tilde{w})$ từ bộ nhớ, SVRG lập tức tổng hợp được vectơ hiệu chỉnh $v_t$ với chi phí siêu nhẹ là $\mathcal{O}(1)$ cho mỗi bước trượt.
+
 \end{itemize}
+
+
 
 Sự kết hợp tinh tế này giúp SVRG triệt tiêu hoàn toàn điểm nghẽn bộ nhớ của SAG/SAGA. Thay vì phải lưu trữ đồng thời $n$ vectơ gradient lịch sử trong không gian máy tính, SVRG chỉ yêu cầu lưu trữ duy nhất một vectơ gradient toàn phần $\nabla P(\tilde{w})$, đưa chi phí bộ nhớ về mức tối giản $\mathcal{O}(d)$ \cite{johnson2013accelerating}.
 
-\subsubsection{Giả mã thuật toán}
 
-Dưới đây là cấu trúc mã giả chính thức của thuật toán SVRG được xây dựng đồng bộ theo nguyên bản thiết kế của Johnson và Zhang \cite{johnson2013accelerating} kết hợp với các mô tả chuẩn hóa từ Schmidt và cộng sự \cite{schmidt2017minimizing}:
+
+\paragraph{Giả mã thuật toán}
+
+
+
+Dưới đây là cấu trúc mã giả chính thức của thuật toán SVRG theo nguyên bản thiết kế của Johnson và Zhang \cite{johnson2013accelerating}:
+
+
 
 \begin{algorithm}[H]
+
 \SetAlgoLined
+
 \KwIn{Hệ số bước học cố định $\eta > 0$, độ dài vòng lặp trong $m$, điểm khởi tạo ban đầu $\tilde{w}_0 \in \mathbb{R}^d$.}
+
 \BlankLine
 \For{$s = 1, 2, \dots$}{
     $\tilde{w} = \tilde{w}_{s-1}$\;
-    
     $\tilde{\mu} = \nabla P(\tilde{w}) = \frac{1}{n} \sum_{i=1}^n \nabla \psi_i(\tilde{w})$\;
-    
     $w_0 = \tilde{w}$\;
-    
     \For{$t = 1, 2, \dots, m$}{
         Lấy mẫu ngẫu nhiên chỉ số $i_t \in \{1, \dots, n\}$ theo phân phối đều\;
         $v_t = \nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \tilde{\mu}$\;
-        
         $w_t = w_{t-1} - \eta v_t$\;
     }
     \textbf{Tùy chọn thiết lập đầu ra chu kỳ:} \;
     
     \underline{Lựa chọn 1:} $\tilde{w}_s = w_m$ \quad (Chọn điểm cuối cùng)\;
     
-    % \underline{Lựa chọn 2:} $\tilde{w}_s = \frac{1}{m} \sum_{t=1}^m w_{t-1}$ \quad (Chọn điểm trung bình)\;
+    % \underline{Lựa chọn 2:} $\tilde{w}_s = \frac{1}{m} \sum_{t=1}^m w_{t-1}$ \quad (Chọn điểm trung bình)\
     
     \underline{Lựa chọn 2:} $\tilde{w}_s = w_t$ với $t$ được chọn ngẫu nhiên đều từ $\{0, \dots, m-1\}$\;
+
 }
+
 \caption{Thuật toán Stochastic Variance Reduced Gradient (SVRG)}
+
 \label{alg:svrg}
+
 \end{algorithm}
 
-\subsubsection{Thảo luận trực quan}
+% \subsubsection{Thảo luận trực quan}
 
 Một điểm ưu việt nổi bật của SVRG khi đặt cạnh SGD cổ điển nằm ở chiến lược thiết lập hệ số bước học $\eta$. Trong môi trường SGD truyền thống, do xung đột nhiễu phương sai cố định, thuật toán bắt buộc phải ép bước học giảm dần về không theo quy luật Robbins-Monro ($\eta_t \to 0$), dẫn đến việc tốc độ trượt tiến về nghiệm bị trì trệ. 
 
 Ngược lại, như Johnson và Zhang \cite{johnson2013accelerating} đã luận giải chi tiết, do SVRG sở hữu cấu trúc hiệu chỉnh tích hợp, năng lượng nhiễu phương sai của vectơ ước lượng $v_t$ sẽ tự động suy giảm tỷ lệ thuận với khoảng cách đến điểm tối ưu. Khi quỹ đạo tham số tiến sát đến $w^*$, đại lượng nhiễu tự triệt tiêu về mức không, loại bỏ hoàn toàn nguy cơ xảy ra hiện tượng văng hạt hoặc phân kỳ. Nhờ đặc tính tự ổn định này, SVRG cho phép người dùng duy trì một hệ số bước học $\eta$ ở mức hằng số cố định (constant step size) xuyên suốt toàn bộ quá trình thực thi. Việc giữ nguyên sải bước lớn giúp thuật toán liên tục bứt tốc mà không gặp hiện tượng suy giảm động năng, đây chính là chìa khóa then chốt đưa giải thuật đạt tới tốc độ hội tụ tuyến tính.
 
-\section{Phân tích hội tụ cho hàm lồi mạnh}
+\section{Phân tích hội tụ}
 
-Để khẳng định tính ưu việt của SVRG trên phương diện lý thuyết toán học, phần này thiết lập các bước chứng minh và phân tích điều kiện hội tụ của thuật toán đối với lớp hàm mục tiêu lồi mạnh và trơn Lipschitz.
+Trong phạm vi của khóa luận này, chúng tôi chỉ tập trung phân tích sự hội tụ của SVRG cho lớp bài toán lồi mạnh và trơn Lipschitz. Đây cũng là lớp bài toán kinh điển mà Johnson và Zhang \cite{johnson2013accelerating} đã thiết lập các chứng minh trong công trình gốc. Đối với các bài toán lồi không mạnh hoặc không lồi, một số kết quả mở rộng sẽ được thảo luận sơ lược ở phần cuối chương.
 
-\subsection{Giả thiết và ký hiệu}
+% \paragraph{Giả thiết}
 
-Xuyên suốt quá trình phân tích kỹ thuật, cấu trúc hình học của hàm mục tiêu $P(w)$ được định hình dựa trên hai giả thiết toán học kinh điển sau từ Johnson và Zhang \cite{johnson2013accelerating}:
-\begin{itemize}
-    \item \textbf{Giả thiết 1 (Tính trơn Lipschitz - Smoothness):} Mỗi hàm thành phần $\psi_i(w)$ đều khả vi liên tục và có gradient thỏa mãn điều kiện Lipschitz với hằng số $L > 0$, tức là với mọi $u, v \in \mathbb{R}^d$:
-    \begin{equation}\label{eq:smooth_assumption}
-    \|\nabla \psi_i(u) - \nabla \psi_i(v)\| \le L \|u - v\|
-    \end{equation}
-    \item \textbf{Giả thiết 2 (Tính lồi mạnh - Strong Convexity):} Hàm mục tiêu tổng thể $P(w)$ lồi mạnh với hằng số $\gamma > 0$, nghĩa là với mọi $u, v \in \mathbb{R}^d$:
-    \begin{equation}\label{eq:strong_convex_assumption}
-    P(u) \ge P(v) + \langle \nabla P(v), u - v \rangle + \frac{\gamma}{2}\|u - v\|^2
-    \end{equation}
-\end{itemize}
+Xuyên suốt quá trình phân tích, cấu trúc hình học của hàm mục tiêu $P(w)$ được định hình dựa trên hai giả thiết sau:
 
-\subsection{Bổ đề phương sai bị chặn}
+\begin{assumption}[Tính trơn Lipschitz]
+\label{ass:smooth}
+Mỗi hàm thành phần $\psi_i(w)$ có gradient thỏa mãn điều kiện Lipschitz với hằng số $L > 0$:
+\begin{equation}
+\|\nabla \psi_i(u) - \nabla \psi_i(v)\| \le L \|u - v\|, \quad \forall u, v \in \mathbb{R}^d
+\end{equation}
+\end{assumption}
+
+\begin{assumption}[Tính lồi mạnh]
+\label{ass:strong_convex}
+Hàm mục tiêu tổng thể $P(w)$ lồi mạnh với hằng số $\gamma > 0$:
+\begin{equation}
+P(u) \ge P(v) + \langle \nabla P(v), u - v \rangle + \frac{\gamma}{2}\|u - v\|^2, \quad \forall u, v \in \mathbb{R}^d
+\end{equation}
+\end{assumption}
+
+% \subsection{Bổ đề phương sai bị chặn}
 
 Bước đi mang tính quyết định trong toàn bộ cấu trúc chứng minh định lý hội tụ của SVRG là việc thiết lập một chặn trên cho bình phương chuẩn của vectơ gradient hiệu chỉnh $v_t$. Bổ đề này định lượng hóa một cách trực quan cách thức kỹ thuật VR kiểm soát năng lượng nhiễu của toán tử xấp xỉ ngẫu nhiên.
 
@@ -148,56 +220,88 @@ Dưới các giả thiết (\ref{eq:smooth_assumption}) và (\ref{eq:strong_conv
 \end{equation}
 \end{lemma}
 
+
+
 \begin{proof}
+
 Theo công thức toán tử ước lượng, ta khai triển bình phương chuẩn dựa trên tính chất $\mathbb{E}\|X - \mathbb{E}X + \mathbb{E}X\|^2 = \mathbb{E}\|X - \mathbb{E}X\|^2 + \|\mathbb{E}X\|^2 \le \mathbb{E}\|X\|^2$:
+
 \begin{align}
 \mathbb{E}_{i_t} \left[ \|v_t\|^2 \right] &= \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(\tilde{w}) + \nabla P(\tilde{w})\|^2 \right] \\
 &\le 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(w^*)\|^2 \right] + 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(\tilde{w}) - \nabla \psi_{i_t}(w^*) - \nabla P(\tilde{w})\|^2 \right] \nonumber \\
 &\le 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(w_{t-1}) - \nabla \psi_{i_t}(w^*)\|^2 \right] + 2 \mathbb{E}_{i_t} \left[ \|\nabla \psi_{i_t}(\tilde{w}) - \nabla \psi_{i_t}(w^*)\|^2 \right]
 \end{align}
+
 Áp dụng một tính chất chuẩn mực của lớp hàm trơn Lipschitz có cực tiểu tại $w^*$, ta luôn có bất đẳng thức $\frac{1}{n}\sum_{i=1}^n \|\nabla \psi_i(w) - \nabla \psi_i(w^*)\|^2 \le 2L(P(w) - P(w^*))$. Thay thế tính chất này vào hai số hạng kỳ vọng trên, ta trực tiếp thu được kết quả của bổ đề:
+
 \begin{equation}
 \mathbb{E}_{i_t} \left[ \|v_t\|^2 \right] \le 2L \left[ P(w_{t-1}) - P(w^*) \right] + 2L \left[ P(\tilde{w}) - P(w^*) \right]
 \end{equation}
+
 Bất đẳng thức (\ref{eq:variance_lemma_bound}) đã chứng minh một cách tường minh luận điểm lý thuyết: khi cả hai đại lượng $w_{t-1}$ và $\tilde{w}$ đồng thời tiệm cận về nghiệm $w^*$, vế phải của bất đẳng thức tự động triệt tiêu về mức không, kéo theo bình phương trung bình của hướng trượt tiến sát về giá trị gradient chính xác của hệ thống, loại bỏ hoàn toàn sai số bình phương trung bình (MSE) như Driggs và các cộng sự \cite{driggs2022accelerating} đã đúc kết.
 \end{proof}
 
-\subsection{Định lý hội tụ tuyến tính}
+% \subsection{Định lý hội tụ tuyến tính}
 
 Dựa trên nền tảng của Bổ đề \ref{lem:variance_bound}, Johnson và Zhang \cite{johnson2013accelerating} đã thiết lập Định lý mang tính nền móng chứng minh tốc độ hội tụ của SVRG cho lớp hàm lồi mạnh.
+
 
 \begin{theorem}[Johnson \& Zhang, 2013]\label{theo:svrg_linear}
 Giả sử các điều kiện (\ref{eq:smooth_assumption}) và (\ref{eq:strong_convex_assumption}) được thỏa mãn. Nếu đầu ra của chu kỳ $s$ được lựa chọn ngẫu nhiên theo Lựa chọn 3 trong Sơ đồ giải thuật, ta có bất đẳng thức hội tụ tổng quát:
 \begin{equation}
 \mathbb{E} \left[ P(\tilde{w}_s) - P(w^*) \right] \le \alpha \cdot \mathbb{E} \left[ P(\tilde{w}_{s-1}) - P(w^*) \right]
 \end{equation}
+
 Trong đó, hệ số co hình học $\alpha$ được xác định cụ thể thông qua biểu thức định lượng:
+
 \begin{equation}\label{eq:alpha_co}
 \alpha = \frac{1}{\gamma m \eta (1 - 2L\eta)} + \frac{2L\eta}{1 - 2L\eta}
 \end{equation}
 \end{theorem}
 
+
+
 Để thuật toán đảm bảo tính hội tụ tuyến tính, tham số bước học $\eta$ và độ dài chu kỳ $m$ bắt buộc phải được thiết lập sao cho hệ số co thỏa mãn điều kiện ngặt: $\alpha < 1$. Phân tích biểu thức (\ref{eq:alpha_co}) cho thấy, ta cần chọn $\eta$ đủ nhỏ để thành phần thứ hai $\frac{2L\eta}{1 - 2L\eta}$ không vượt quá ngưỡng hằng số, cụ thể là $\eta < \frac{1}{4L}$. Đồng thời, độ dài vòng lặp trong $m$ phải được cấu hình đủ lớn nhằm đẩy giá trị của số hạng thứ nhất tiến về không. Khi hai điều kiện này được đáp ứng, $\alpha$ trở thành một hằng số co nghiêm ngặt độc lập với thời gian, chứng minh rằng sai số tối ưu của SVRG giảm theo cấp số mũ qua từng chu kỳ.
 
-\subsection{So sánh độ phức tạp toán học}
+
+
+% \subsection{So sánh độ phức tạp toán học}
+
+
 
 Để làm nổi bật vị thế của SVRG, việc thực hiện một phân tích so sánh định lượng về tổng chi phí tính toán (Computational Complexity) để đạt được sai số $\epsilon$ giữa ba đại diện tiêu biểu là điều cực kỳ cần thiết. Từ hệ quả của Định lý \ref{theo:svrg_linear}, Johnson và Zhang \cite{johnson2013accelerating} đã tổng kết bài toán so sánh dựa trên các thông số đặc trưng:
 
+
+
 % \begin{table}[H]
+
 % \centering
+
 % \caption{So sánh tổng chi phí tính toán để đạt độ chính xác $\epsilon$}
+
 % \label{tab:complexity_compare}
+
 % \begin{tabular}{lccc}
+
 % \hline
+
 % \textbf{Thuật toán} & \textbf{Chi phí một bước lặp} & \textbf{Số bước lặp cần thiết} & \textbf{Tổng chi phí tính toán} \\ \hline
+
 % \textbf{GD}   & $\mathcal{O}(n)$ & $\mathcal{O}\left(\frac{L}{\gamma}\log(1/\epsilon)\right)$ & $\mathcal{O}\left(n \cdot \frac{L}{\gamma}\log(1/\epsilon)\right)$ \\
+
 % \textbf{SGD}  & $\mathcal{O}(1)$ & $\mathcal{O}\left(\frac{L}{\gamma}\cdot\frac{1}{\epsilon}\right)$ & $\mathcal{O}\left(\frac{L}{\gamma}\cdot\frac{1}{\epsilon}\right)$ \\
+
 % \textbf{SVRG} & $\mathcal{O}(1) \text{ (amortis)}$ & $\mathcal{O}\left(\left(n + \frac{L}{\gamma}\right)\log(1/\epsilon)\right)$ & $\mathcal{O}\left(\left(n + \frac{L}{\gamma}\right)\log(1/\epsilon)\right)$ \\ \hline
+
 % \end{tabular}
+
 % \end{table}
+
+
 
 \begin{table}[H]
 \centering
+
 \caption{So sánh tổng chi phí tính toán để đạt độ chính xác $\epsilon$}
 \label{tab:complexity_compare}
 \small % Giảm size chữ một chút để bảng thanh thoát hơn
@@ -213,58 +317,91 @@ Trong đó, hệ số co hình học $\alpha$ được xác định cụ thể t
 \end{table}
 
 Phân tích định lượng từ Bảng \ref{tab:complexity_compare} vạch rõ ranh giới hiệu năng trong môi trường dữ liệu lớn:
+
 \begin{itemize}
+
     \item Khi bài toán có độ phức tạp cao hoặc yêu cầu nghiệm có độ chính xác cực kỳ khắt khe ($\epsilon \to 0$), đại lượng $1/\epsilon$ của SGD tăng trưởng bùng nổ theo cấp số đa thức, khiến SGD bị tụt lại rất xa phía sau do thắt nút cổ chai phương sai.
+
     \item Xét trên phương diện cấu trúc dữ liệu quy mô lớn ($n$ vô cùng lớn), tổng chi phí của GD gánh chịu một hệ số nhân dạng tích $n \times \frac{L}{\gamma}$. Trong khi đó, tổng chi phí của SVRG chỉ tồn tại dưới dạng cấu trúc tuyến tính cộng tuyến: $\mathcal{O}((n + L/\gamma)\log(1/\epsilon))$. 
+
 \end{itemize}
+
 Sự chuyển dịch từ phép nhân sang phép cộng trong công thức tính toán độ phức tạp là một bước tiến mang ý nghĩa cách mạng. Nó chứng minh rằng SVRG vừa duy trì được lợi thế tính toán siêu nhẹ trên từng mẫu dữ liệu đơn lẻ, vừa giải phóng hệ thống khỏi sự phụ thuộc nặng nề vào quy mô tập mẫu $n$ của phương pháp trượt gradient toàn phần, thiết lập một tiêu chuẩn hiệu năng vượt trội trong lý thuyết tối ưu hóa ngẫu nhiên hiện đại.
 
-\subsection{Các biến thể quan trọng}
+\section{Các biến thể quan trọng}
 
 Để mở rộng phạm vi ứng dụng của thuật toán SVRG nguyên bản từ lớp bài toán lồi mạnh, trơn sang các ngữ cảnh thực tế phức tạp hơn—chẳng hạn như xử lý dữ liệu lớn trên kiến trúc song song, tối ưu hóa các hàm mục tiêu không khả vi, hoặc giải quyết bài toán lồi tổng quát—nhiều biến thể quan trọng đã được phát triển và chứng minh toán học một cách chặt chẽ.
 
-\subsubsection{SVRG với mini-batch}
+\subsection{SVRG với mini-batch}
 
 Trong môi trường tính toán hiện đại, việc cập nhật tham số dựa trên một mẫu đơn lẻ tại mỗi bước lặp nội bộ của SVRG có thể làm giảm hiệu năng khai thác năng lực phần cứng (như GPU/TPU) và gây ra những dao động ngẫu nhiên lớn. Biến thể SVRG với mini-batch được đề xuất nhằm trung hòa nhược điểm này bằng cách thay thế một mẫu đơn lẻ $i_t$ bằng một tập hợp chỉ số ngẫu nhiên $\mathcal{B}_t \subset \{1, \dots, n\}$ có kích thước $|\mathcal{B}_t| = b$ \cite{schmidt2017minimizing}. Công thức ước lượng gradient hiệu chỉnh lúc này trở thành:
+
 \begin{equation}
 v_t = \frac{1}{b} \sum_{i \in \mathcal{B}_t} \nabla \psi_i(w_{t-1}) - \frac{1}{b} \sum_{i \in \mathcal{B}_t} \nabla \psi_i(\tilde{w}) + \nabla P(\tilde{w})
 \end{equation}
+
 Như Schmidt và các cộng sự \cite{schmidt2017minimizing} đã phân tích chi tiết trong Mục 4.7, việc tích hợp mini-batch tạo ra một sự đánh đổi toán học tường minh (trade-off) giữa chi phí tính toán của một vòng lặp và tốc độ hội tụ lý thuyết. Về mặt ưu điểm, tăng kích thước batch $b$ giúp thu hẹp trực tiếp phương sai gốc của toán tử ước lượng ngẫu nhiên ngay từ cấu trúc số hạng đầu tiên, cho phép thuật toán áp dụng các hệ số bước học $\eta$ lớn hơn và tăng tính ổn định của quỹ đạo trượt. Tuy nhiên, về mặt chi phí, khối lượng tính toán gradient tại mỗi bước tăng tuyến tính theo hệ số $b$. Do đó, việc lựa chọn kích thước mini-batch tối ưu phụ thuộc chặt chẽ vào kiến trúc phần cứng, trong đó các giá trị $b$ nhỏ ($b \in [10, 100]$) thường đạt hiệu năng tối ưu nhờ cân bằng được cả hai yếu tố trên.
 
-\subsubsection{Proximal SVRG}
+
+
+\subsection{Proximal SVRG}
 
 Trong nhiều ứng dụng học máy, đặc biệt là các bài toán lựa chọn đặc trưng (feature selection) hoặc bài toán tối ưu hóa cấu trúc thưa (sparsity-inducing), hàm mục tiêu thường xuất hiện dưới dạng toán tử tổ hợp (composite optimization):
+
 \begin{equation}
 \min_{w \in \mathbb{R}^d} F(w) := P(w) + R(w)
 \end{equation}
+
 Trong đó, $P(w) = \frac{1}{n} \sum_{i=1}^n \psi_i(w)$ là thành phần lồi trơn Lipschitz, còn $R(w)$ là hàm chỉnh hóa lồi nhưng không khả vi (ví dụ, hàm chỉnh hóa $L_1$-norm dạng $R(w) = \lambda \|w\|_1$). Để giải quyết cấu trúc không trơn này, Allen-Zhu \cite{allen2017katyusha} và Driggs \cite{driggs2022accelerating} đã trình bày cấu trúc của thuật toán Proximal SVRG bằng cách tích hợp toán tử tiệm cận (proximal operator).
 
+
+
 Cụ thể, tại vòng lặp trong của Proximal SVRG, hướng trượt ngẫu nhiên hiệu chỉnh $v_t$ vẫn được tính toán trên thành phần trơn $P(w)$ tương tự công thức (\ref{eq:svrg_estimator}). Sau đó, bước cập nhật tham số không thực hiện trượt gradient trực tiếp mà được thông qua một bài toán tối ưu phụ trợ định hình bởi toán tử proximal của hàm $R(w)$ \cite{allen2017katyusha}:
+
 \begin{equation}
 w_t = \text{prox}_{\eta R} \left( w_{t-1} - \eta v_t \right) := \arg\min_{u \in \mathbb{R}^d} \left\{ R(u) + \frac{1}{2\eta} \|u - (w_{t-1} - \eta v_t)\|^2 \right\}
 \end{equation}
+
 Sự kết hợp này cho phép toán tử giảm phương sai hoạt động độc lập trên phần trơn để triệt tiêu nhiễu, trong khi toán tử proximal xử lý điểm kỳ dị không khả vi của $R(w)$ tại mỗi bước lặp nội bộ. Nghiên cứu của Driggs và các cộng sự \cite{driggs2022accelerating} khẳng định rằng biến thể Proximal SVRG vẫn bảo toàn nguyên vẹn tốc độ hội tụ tuyến tính hình học của phiên bản gốc, đồng thời mở rộng khả năng tối ưu hóa cho lớp bài toán chỉnh hóa thưa quy mô lớn.
 
-\subsubsection{SVRG cho bài toán lồi tổng quát (không mạnh)}
+
+
+\subsection{SVRG cho bài toán lồi tổng quát (không mạnh)}
+
+
 
 Khi hàm mục tiêu $P(w)$ chỉ thỏa mãn tính chất lồi trơn Lipschitz mà thiếu đi giả thiết lồi mạnh ($\gamma = 0$), hệ số co $\alpha$ trong công thức (\ref{eq:alpha_co}) không còn được ràng buộc nghiêm ngặt nhỏ hơn 1, khiến phép chứng minh hội tụ tuyến tính ban đầu không thể áp dụng trực tiếp. Mặc dù vậy, Johnson và Zhang \cite{johnson2013accelerating} đã chỉ ra trong phần phân tích lý thuyết rằng SVRG vẫn có khả năng đạt được tốc độ hội tụ cận tối ưu ở mức $\mathcal{O}(1/T)$ cho các hàm lồi tổng quát, vượt trội hơn tốc độ $\mathcal{O}(1/\sqrt{T})$ của SGD cổ điển.
 
+
+
 Để hiện thực hóa tốc độ $\mathcal{O}(1/k)$ một cách tường minh và ổn định trên thực tế, Schmidt và các cộng sự \cite{schmidt2017minimizing} đã làm rõ một chiến lược kỹ thuật dựa trên nguyên lý chỉnh hóa lồi mạnh nhân tạo (perturbation/regularization technique). Cụ thể, ta tiến hành biến đổi bài toán gốc không lồi mạnh bằng cách bổ sung thêm một số hạng chỉnh hóa bình phương với một trọng số siêu nhỏ $\delta > 0$:
+
 \begin{equation}
 \min_{w \in \mathbb{R}^d} P_\delta(w) := P(w) + \frac{\delta}{2} \|w - w_0\|^2
 \end{equation}
+
 Hàm mục tiêu biến đổi $P_\delta(w)$ lúc này trở thành một hàm lồi mạnh với hằng số $\gamma = \delta$. Thuật toán SVRG tiêu chuẩn được áp dụng trực tiếp trên hàm mục tiêu mới này để khai thác tốc độ hội tụ tuyến tính của lớp hàm lồi mạnh. Bằng cách thiết lập giá trị $\delta$ tỷ lệ nghịch với độ chính xác mong muốn ($\delta \approx \mathcal{O}(\epsilon)$), biến thể này khôi phục thành công tốc độ hội tụ tổng thể $\mathcal{O}(1/k)$ cho bài toán lồi trơn tổng quát mà không cần thay đổi cấu trúc cốt lõi của giải thuật \cite{schmidt2017minimizing}.
 
-\subsection{Thảo luận về lựa chọn siêu tham số}
+\section{Thảo luận về lựa chọn siêu tham số}
 
 Hiệu năng thực tế của thuật toán SVRG chịu ảnh hưởng sâu sắc bởi ba siêu tham số cốt lõi: độ dài vòng lặp trong $m$, chiến lược cập nhật điểm chụp $\tilde{w}_s$, và hệ số bước học cố định $\eta$. Việc cấu hình các tham số này yêu cầu sự thấu hiểu đồng thời cả lý thuyết giới hạn toán học và các đặc trưng thực nghiệm của tập dữ liệu huấn luyện.
 
+
+
 \begin{enumerate}
     \item \textbf{Cấu hình độ dài vòng lặp trong ($m$):} Từ biểu thức tính toán hệ số co hình học $\alpha$ tại (\ref{eq:alpha_co}), để đảm bảo vế phải nhỏ hơn 1, tích số $\gamma m \eta$ bắt buộc phải đủ lớn, điều này đồng nghĩa với việc $m$ phải tỷ lệ thuận với nghịch đảo của hằng số lồi mạnh và bước học. Tuy nhiên, nếu chọn $m$ quá lớn, thuật toán sẽ thực hiện quá nhiều bước ngẫu nhiên dựa trên một điểm chụp đã lỗi thời, khiến hướng hiệu chỉnh mất đi tính chính xác. Johnson và Zhang \cite{johnson2013accelerating} đã đưa ra gợi ý mang tính thực tiễn: độ dài vòng lặp trong $m$ nên được thiết lập cùng bậc đại số với kích thước tập mẫu $n$ nhưng lớn hơn một chút, phổ biến nhất là cấu hình $m = 2n$ hoặc $m = 5n$ đối với lớp bài toán lồi trong học máy.
+
     \item \textbf{Chiến lược lựa chọn điểm chụp ($\tilde{w}_s$):} SVRG cung cấp hai trường phái thiết lập điểm chụp cho chu kỳ kế tiếp từ tập hợp các trạng thái $\{w_0, w_1, \dots, w_m\}$ của vòng lặp trong hiện tại:
+
     \begin{itemize}
+
         \item \textit{Giá trị trung bình hoặc ngẫu nhiên:} Phân tích lý thuyết toán học của Johnson và Zhang \cite{johnson2013accelerating} dựa trên việc chọn $\tilde{w}_s$ là giá trị trung bình chuỗi $\frac{1}{m}\sum w_{t-1}$ hoặc lấy mẫu ngẫu nhiên đều từ vòng lặp trong. Chiến lược này giúp làm mịn quỹ đạo và đơn giản hóa các chứng minh hội tụ, tuy nhiên nó làm mất đi tính chất thưa (sparsity) của nghiệm nếu bài toán có chứa thành phần không trơn $L_1$.
+
         \item \textit{Giá trị cuối cùng ($w_m$):} Schmidt và các cộng sự \cite{schmidt2017minimizing} nhấn mạnh rằng trên phương diện thực nghiệm, việc thiết lập trực tiếp $\tilde{w}_s = w_m$ (điểm cuối cùng của vòng lặp) mang lại hiệu năng bứt tốc mạnh mẽ hơn rất nhiều. Hơn nữa, nó bảo toàn hoàn toàn cấu trúc đặc trưng (như tính thưa của trọng số) thu được từ các bước tối ưu hóa trước đó.
+
     \end{itemize}
+
     \item \textbf{Đặc trưng của hệ số bước học ($\eta$):} Một trong những phát hiện thực nghiệm quan trọng nhất trong nghiên cứu của Johnson và Zhang \cite{johnson2013accelerating} (Section 5) là SVRG hoạt động cực kỳ hiệu quả và ổn định với một bước học $\eta$ lớn và giữ hằng số cố định xuyên suốt. Trái ngược với SGD—nơi người dùng phải liên tục tinh chỉnh các lịch trình giảm bước học phức tạp để tránh phân kỳ—SVRG chỉ yêu cầu kiểm soát $\eta < \frac{1}{4L}$. Khả năng dung nạp sải bước lớn giúp SVRG duy trì áp lực hội tụ mạnh mẽ, giải phóng người triển khai khỏi gánh nặng dò tìm siêu tham số và tối ưu hóa tối đa tốc độ xử lý trên các bài toán học máy quy mô lớn.
-\end{enumerate}
+
+\end{enumerate} 
+

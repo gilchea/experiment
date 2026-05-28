@@ -1,53 +1,8 @@
-\chapter{Kết luận và hướng phát triển}
+\chapter*{Kết luận}
 \label{chap:conclusion}
 
-\section{Tóm tắt các kết quả lý thuyết và thực nghiệm đã đạt}
+Khóa luận đã trình bày một cách có hệ thống cơ sở phương pháp luận của các giải thuật trượt gradient ngẫu nhiên tăng cường sử dụng phép thu gọn phương sai dự báo, với trọng tâm là thuật toán SVRG. Về mặt lý thuyết, luận văn đã phân tích chi tiết nguyên nhân khiến SGD cổ điển chịu hội tụ dưới tuyến tính (phương sai gradient không triệt tiêu khi tiến đến nghiệm) và từ đó dẫn dắt ý tưởng thu gọn phương sai thông qua gradient tham chiếu toàn phần định kỳ. Thuật toán SVRG với cấu trúc hai vòng lặp lồng nhau đã được mô tả tường minh, cùng với chứng minh chặt chẽ về tính không chệch và phương sai bị chặn của ước lượng gradient hiệu chỉnh. Khóa luận đã thiết lập định lý hội tụ tuyến tính cho SVRG trên lớp hàm lồi mạnh, chỉ ra tổng số lần đánh giá gradient thành phần để đạt sai số $\epsilon$ là $\mathcal{O}\bigl((n + \kappa)\log(1/\epsilon)\bigr)$, cải thiện đáng kể so với GD và SGD. Về mặt thực nghiệm, chúng tôi đã cài đặt và so sánh SVRG với GD, SGD trên các tập dữ liệu MNIST. Kết quả cho thấy SVRG hội tụ nhanh và ổn định, thời gian thực thi nhanh hơn SGD khoảng một bậc và nhanh hơn GD hàng trăm lần, đồng thời ít nhạy cảm với bước học hơn SGD.
 
-Khóa luận đã trình bày một cách có hệ thống cơ sở phương pháp luận của các giải thuật trượt gradient ngẫu nhiên tăng cường sử dụng phép thu gọn phương sai dự báo, với trọng tâm là thuật toán SVRG do \cite{johnson2013accelerating} đề xuất. Về mặt lý thuyết, luận văn đã tập trung vào lớp bài toán tối thiểu hóa rủi ro thực nghiệm (ERM) với cấu trúc tổng hữu hạn, trong đó hàm mục tiêu là lồi mạnh và các hàm thành phần đều trơn. Chúng tôi đã phân tích chi tiết nguyên nhân khiến SGD cổ điển chịu hội tụ dưới tuyến tính – đó là do phương sai của gradient ngẫu nhiên không triệt tiêu khi tiến đến nghiệm – và từ đó dẫn dắt ý tưởng thu gọn phương sai thông qua một gradient tham chiếu toàn phần định kỳ.
+Dù đạt được các mục tiêu đề ra, khóa luận vẫn còn một số hạn chế cần được thừa nhận. Toàn bộ phân tích lý thuyết và phần lớn thực nghiệm chỉ giới hạn trong phạm vi bài toán lồi mạnh, trong khi các hàm mục tiêu trong học sâu thường không lồi. Các thực nghiệm mới chỉ dừng ở mức $n \sim 10^5$; với dữ liệu hàng tỉ mẫu, chi phí tính gradient toàn phần định kỳ có thể trở nên đắt đỏ. Khóa luận chủ yếu tập trung vào SVRG cơ bản, chưa cài đặt và so sánh với các thuật toán hậu duệ mạnh hơn như Katyusha \citep{allen2017katyusha} hay các phương pháp giảm phương sai thích nghi (VR‑Adam, VR‑SGD với động lượng). Ngoài ra, việc tinh chỉnh siêu tham số ($m$, $\eta$) còn được thực hiện thủ công qua grid search, chưa có cơ chế tự thích nghi.
 
-Thuật toán SVRG đã được mô tả tường minh với cấu trúc hai vòng lặp lồng: vòng ngoài tính gradient toàn phần tại điểm neo, vòng trong dùng ước lượng gradient hiệu chỉnh để cập nhật tham số. Chúng tôi đã chứng minh một cách chặt chẽ rằng ước lượng này là không chệch và có phương sai bị chặn bởi khoảng cách từ điểm lặp đến điểm neo, do đó phương sai tiến về 0 khi thuật toán hội tụ. Dựa trên bổ đề phương sai bị chặn, khóa luận đã thiết lập định lý hội tụ tuyến tính cho SVRG trong trường hợp hàm mục tiêu lồi mạnh: với bước học $\eta$ và độ dài epoch $m$ được chọn phù hợp, sai số kỳ vọng sau mỗi epoch co rút theo một hằng số nhỏ hơn 1. Từ đó, tổng số lần đánh giá gradient thành phần để đạt sai số $\epsilon$ là $\mathcal{O}\bigl((n + \kappa)\log(1/\epsilon)\bigr)$, cải thiện đáng kể so với $\mathcal{O}(n\kappa\log(1/\epsilon))$ của GD và vượt trội so với hội tụ $O(1/\epsilon)$ của SGD.
-
-Về mặt thực nghiệm, chúng tôi đã cài đặt và so sánh SVRG với GD và SGD trên bài toán hồi quy logistic có chuẩn hóa $\ell_2$, sử dụng tập dữ liệu MNIST (60.000 mẫu, 784 chiều) và tập con HIGGS (100.000 mẫu, 28 chiều). Kết quả cho thấy SVRG hội tụ nhanh và ổn định, đạt độ chính xác cao chỉ sau vài chục epoch quy đổi, trong khi SGD dao động mạnh và GD đòi hỏi số epoch rất lớn. Thời gian thực thi để đạt sai số $10^{-6}$ của SVRG nhanh hơn SGD khoảng một bậc và nhanh hơn GD hàng trăm lần. Các thí nghiệm cũng chỉ ra rằng SVRG ít nhạy cảm với bước học hơn SGD, miễn là tham số $m$ (số bước vòng trong) được chọn đủ lớn, cụ thể $m = 2n$ cho kết quả ổn định và hiệu quả.
-
-Những kết quả này khẳng định nguyên lý thu gọn phương sai dự báo thực sự mang lại một bước tiến quan trọng: kết hợp được ưu điểm chi phí mỗi bước thấp của SGD với tốc độ hội tụ tuyến tính vốn chỉ có ở GD.
-
-\section{Đóng góp của khóa luận}
-
-Trong khuôn khổ một khóa luận đại học, các đóng góp chính của công trình này bao gồm:
-
-\begin{enumerate}
-    \item \textbf{Hệ thống hóa cơ sở lý thuyết về giảm phương sai:} Luận văn đã xây dựng một bức tranh mạch lạc từ bài toán tối ưu trong học máy, các kiến thức nền tảng về giải tích lồi và các thuật toán gradient cổ điển, cho đến nguyên lý và chứng minh hội tụ của SVRG. Các bổ đề và định lý được trình bày với chứng minh chi tiết, giúp người đọc nắm vững cơ chế hoạt động của thuật toán.
-    \item \textbf{Phân tích so sánh toàn diện:} Khóa luận đã so sánh SVRG với GD, SGD, cũng như các phương pháp tiên phong SAG, SAGA về các mặt đảm bảo hội tụ, chi phí gradient, yêu cầu bộ nhớ và các điều kiện áp dụng. Sự so sánh này làm nổi bật ưu điểm của SVRG: chỉ cần bộ nhớ $O(d)$ và đạt độ phức tạp gradient $\mathcal{O}((n+\kappa)\log(1/\epsilon))$.
-    \item \textbf{Minh họa thực nghiệm định lượng:} Các thí nghiệm trên dữ liệu thực đã cung cấp bằng chứng xác thực cho các kết quả lý thuyết, đồng thời đưa ra các quan sát hữu ích về lựa chọn siêu tham số trong thực hành, đặc biệt là quan hệ giữa $m$ và $\eta$.
-    \item \textbf{Tài liệu tham khảo tiếng Việt:} Với việc trình bày các khái niệm chuyên sâu bằng tiếng Việt, kèm chú thích thuật ngữ gốc tiếng Anh khi cần, khóa luận có thể đóng vai trò như một tài liệu tham khảo có tính tiếp cận cho sinh viên và người mới bắt đầu nghiên cứu về tối ưu ngẫu nhiên và các kỹ thuật giảm phương sai.
-\end{enumerate}
-
-\section{Hạn chế}
-
-Dù đạt được các mục tiêu đề ra, khóa luận vẫn còn một số hạn chế cần được thừa nhận:
-
-\begin{itemize}
-    \item \textbf{Bài toán không lồi:} Toàn bộ phân tích lý thuyết và phần lớn thực nghiệm chỉ giới hạn trong phạm vi bài toán lồi mạnh. Trong học sâu, các hàm mục tiêu thường không lồi, và các đảm bảo hội tụ của SVRG không còn được giữ nguyên. Dù đã có những nghiên cứu mở rộng SVRG cho bài toán không lồi, luận văn chưa có điều kiện đề cập sâu.
-    \item \textbf{Dữ liệu quy mô rất lớn:} Các thực nghiệm mới chỉ dừng ở mức $n \sim 10^5$. Với các tập dữ liệu hàng tỉ mẫu, chi phí tính gradient toàn phần định kỳ có thể trở nên đắt đỏ, và những kỹ thuật giảm phương sai không cần snapshot toàn phần (như SAGA kết hợp truy cập tuần tự) hoặc các biến thể phân tán của SVRG cần được xem xét. Giới hạn về tài nguyên phần cứng cũng cản trở các thử nghiệm quy mô lớn hơn.
-    \item \textbf{So sánh chưa đầy đủ với các biến thể mạnh hơn:} Khóa luận chủ yếu tập trung vào SVRG cơ bản. Các thuật toán hậu duệ như Katyusha \citep{allen2017katyusha} (kết hợp đà và tăng tốc Nesterov), hay các phương pháp giảm phương sai thích nghi (VR‑Adam, VR‑SGD với động lượng) chưa được cài đặt và so sánh. Do đó, một số kết luận về tính ưu việt của SVRG chỉ mang tính tương đối.
-    \item \textbf{Tinh chỉnh siêu tham số thủ công:} Các tham số $m$, $\eta$ được chọn qua grid search trên tập validation nhỏ. Trong môi trường thay đổi, việc không có cơ chế tự thích nghi có thể khiến hiệu năng suy giảm.
-\end{itemize}
-
-\section{Hướng phát triển}
-
-Từ những kết quả và hạn chế đã nêu, một số hướng nghiên cứu tiếp theo đầy triển vọng bao gồm:
-
-\begin{itemize}
-    \item \textbf{SVRG cho học sâu và bài toán không lồi:} Mở rộng phân tích hội tụ và thử nghiệm SVRG (hoặc các biến thể Proximal SVRG, SVRG với gradient toàn phần xấp xỉ) cho các kiến trúc mạng nơ-ron sâu. Kết hợp với các kỹ thuật khởi tạo và escape saddle point để đảm bảo tiến trình tối ưu không bị mắc kẹt tại điểm yên ngựa. Những kết quả ban đầu cho thấy SVRG có thể ổn định quá trình huấn luyện và giảm phương sai của gradient trong mạng sâu, nhưng cần thêm kiểm chứng.
-    
-    \item \textbf{Kết hợp SVRG với động lượng và tăng tốc Nesterov:} Các phương pháp như Katyusha \citep{allen2017katyusha} và Acc‑SVRG đã chỉ ra rằng việc tích hợp đà (momentum) vào cập nhật SVRG có thể đạt tốc độ hội tụ tối ưu $O\bigl((n + \sqrt{n\kappa})\log(1/\epsilon)\bigr)$, nhanh hơn đáng kể khi $\kappa$ lớn. Nghiên cứu sâu hơn về cách kết hợp này và triển khai chúng trên các bài toán cỡ vừa và lớn là một lộ trình tự nhiên.
-    
-    \item \textbf{Phương pháp giảm phương sai thích nghi (Adam + Variance Reduction):} Các bộ tối ưu thích nghi như Adam, RMSProp thống trị trong học sâu nhờ khả năng tự điều chỉnh bước học theo từng tọa độ. Tuy nhiên, chúng vẫn dùng gradient ngẫu nhiên thô và do đó về lý thuyết chỉ hội tụ dưới tuyến tính. Kết hợp chiến lược giảm phương sai với cơ chế thích nghi – ví dụ lưu một bảng gradient như SAGA và dùng các moment bậc nhất, bậc hai – đang là một hướng nghiên cứu mở. Những công trình như SVRG‑Adam, VR‑Adam hứa hẹn mang lại cả sự ổn định và tốc độ hội tụ nhanh hơn.
-    
-    \item \textbf{Giảm phương sai trong học trực tuyến và suy luận Bayes:} Mở rộng nguyên lý thu gọn phương sai sang các bài toán ước lượng trực tuyến khi dữ liệu đến liên tục (streaming) hoặc cho các phương pháp Monte Carlo biến phân ngẫu nhiên (Stochastic Gradient Langevin Dynamics, SGLD). Những cải tiến này có thể giúp giảm phương sai trong quá trình suy luận hậu nghiệm, tăng tốc hội tụ đến phân phối mục tiêu.
-    
-    \item \textbf{Triển khai phân tán và tận dụng GPU:} Để giải quyết bài toán với $n$ và $d$ rất lớn, cần thiết kế các phiên bản SVRG phân tán (distributed SVRG) hoặc tận dụng tối đa GPU cho cả gradient toàn phần lẫn vòng trong. Nghiên cứu về các cấu trúc dữ liệu và chiến lược truyền thông hiệu quả có thể giúp SVRG thực sự trở thành công cụ thực tế trong huấn luyện mô hình kích thước lớn.
-\end{itemize}
-
-Nhìn chung, thu gọn phương sai là một nguyên lý mạnh mẽ và còn nhiều tiềm năng phát triển. Khóa luận này chỉ là bước khởi đầu tìm hiểu, và chúng tôi hi vọng sẽ tiếp tục khai thác sâu hơn các hướng đi trên trong tương lai.
-
+Từ những kết quả và hạn chế đã nêu, một số hướng phát triển tiếp theo đầy triển vọng bao gồm: (i) mở rộng SVRG cho học sâu và bài toán không lồi, kết hợp với các kỹ thuật escape saddle point; (ii) kết hợp SVRG với động lượng và tăng tốc Nesterov như Katyusha \citep{allen2017katyusha} để đạt tốc độ hội tụ tối ưu $O\bigl((n + \sqrt{n\kappa})\log(1/\epsilon)\bigr)$; (iii) phát triển các phương pháp giảm phương sai thích nghi (Adam + Variance Reduction) nhằm tự điều chỉnh bước học theo từng tọa độ; (iv) mở rộng nguyên lý thu gọn phương sai sang học trực tuyến và suy luận Bayes (ví dụ SGLD); (v) triển khai các phiên bản SVRG phân tán hoặc tận dụng GPU để xử lý dữ liệu siêu lớn. Nhìn chung, thu gọn phương sai là một nguyên lý mạnh mẽ và còn nhiều tiềm năng phát triển. Khóa luận này chỉ là bước khởi đầu, và chúng tôi hy vọng sẽ tiếp tục khai thác sâu hơn các hướng đi trên trong tương lai.
