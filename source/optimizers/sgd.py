@@ -13,15 +13,6 @@ Per PROCEDURE_SGD_.md:
 import numpy as np
 from models.logistic import stoch_grad, full_grad
 
-# def _get_stoch_grad_fn(multiclass):
-#     """Return appropriate stochastic gradient function."""
-#     return stoch_grad_multiclass if multiclass else stoch_grad_binary
-
-# def _get_full_grad_fn(multiclass):
-#     """Return appropriate full gradient function."""
-#     return grad_full_multiclass if multiclass else grad_full_binary
-
-
 # ---------------------------------------------------------------------------
 # SGD with Constant Learning Rate
 # ---------------------------------------------------------------------------
@@ -105,7 +96,7 @@ def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None, tr
 # SGD with Decaying Learning Rate  (SGD-best)
 # ---------------------------------------------------------------------------
 
-def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False, track_variance=True):
+def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False, track_variance=True):
     """Run 1 epoch of SGD with t-inverse decaying learning rate.
 
     Per PROCEDURE_SGD_.md, t-inverse schedule:
@@ -120,7 +111,7 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False, track_va
         lam        : L2 regularization strength
         n          : dataset size (used for normalizing t in schedule)
         t_start    : total gradient steps before this epoch
-        a          : decay parameter
+        b          : decay parameter
         multiclass : whether multi-class
 
     Returns:
@@ -134,7 +125,7 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False, track_va
     
     for i in indices:
         # Tính toán học tốc tại bước t
-        lr_t = lr0 * (a ** (t // n))
+        lr_t = lr0 * (b ** (t // n))
         
         # 1. Lấy gradient ngẫu nhiên của mẫu i
         g = stoch_grad(w, X[i], y[i], lam, multiclass)
@@ -157,7 +148,7 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False, track_va
     return w, t, epoch_variance
 
 
-def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False, callback=None, track_variance=True):
+def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False, callback=None, track_variance=True):
     """Run multiple epochs of SGD with t-inverse decaying learning rate.
 
     Args:
@@ -167,7 +158,7 @@ def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False, callback=None, t
         lr0        : initial learning rate eta_0
         lam        : regularization
         n_epochs   : number of epochs
-        a          : decay parameter
+        b          : decay parameter
         multiclass : multi-class flag
         callback   : optional function(w, epoch) called after each epoch
         track_variance : whether to track gradient variance
@@ -180,7 +171,7 @@ def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False, callback=None, t
     variances = []
     
     for epoch in range(n_epochs):
-        w, t, epoch_var = sgd_epoch_decay(w, X, y, lr0, lam, n, t, a, multiclass, track_variance)
+        w, t, epoch_var = sgd_epoch_decay(w, X, y, lr0, lam, n, t, b, multiclass, track_variance)
         if track_variance:
             variances.append(epoch_var)
         if callback:
