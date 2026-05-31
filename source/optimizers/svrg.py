@@ -114,108 +114,112 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
 # SVRG for Multi-class Logistic Regression
 # ---------------------------------------------------------------------------
 
-def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
-                               track_variance=True):
-    """One outer iteration of SVRG for multi-class logistic regression.
+# def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
+#                                track_variance=True):
+#     """One outer iteration of SVRG for multi-class logistic regression.
 
-    For multi-class with K classes, W is (d, K).
-    The scalar optimization still applies per class via precomputed probs.
+#     For multi-class with K classes, W is (d, K).
+#     The scalar optimization still applies per class via precomputed probs.
 
-    Args:
-        W_tilde: snapshot weight matrix (d, K)
-        X: feature matrix (n, d)
-        y: label vector (n,) with values in {0, ..., K-1}
-        lr: step size eta
-        lam: L2 regularization
-        m: inner loop length
-        option: 'I' or 'II'
-        track_variance: if True, compute and return gradient variance estimate
+#     Args:
+#         W_tilde: snapshot weight matrix (d, K)
+#         X: feature matrix (n, d)
+#         y: label vector (n,) with values in {0, ..., K-1}
+#         lr: step size eta
+#         lam: L2 regularization
+#         m: inner loop length
+#         option: 'I' or 'II'
+#         track_variance: if True, compute and return gradient variance estimate
 
-    Returns:
-        updated W_tilde
-        (if track_variance, also returns variance estimate)
+#     Returns:
+#         updated W_tilde
+#         (if track_variance, also returns variance estimate)
+#     """
+def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, track_variance=True, var_sample_rate=2000):
     """
-    n = len(y)
-    K = W_tilde.shape[1]
+    Một vòng lặp ngoài SVRG tối ưu hóa theo Chương 5 bài báo gốc.
+    Áp dụng cho bài toán Multi-class (MNIST).
+    
+    var_sample_rate: Cứ sau N bước nhỏ mới tính phương sai chuẩn một lần (Tránh nghẽn cổ chai).
+    """
+    n, d = X.shape
+    K = W_tilde.shape[1] # Số lượng class (MNIST = 10)
 
-    # ── Step 1: Full gradient ──
-    logits_tilde = X @ W_tilde                          # (n, K)
-
-    # Numerically stable softmax
-    logits_tilde -= np.max(logits_tilde, axis=1, keepdims=True)
+    # -------------------------------------------------------------------------
+    # BƯỚC 1: VÒNG LẶP NGOÀI (Tính Full Gradient & Bộ đệm Scalar)
+    # -------------------------------------------------------------------------
+    logits_tilde = X @ W_tilde                                     # (n, K)
+    logits_tilde -= np.max(logits_tilde, axis=1, keepdims=True)    # Ổn định số học
     exp_logits = np.exp(logits_tilde)
+    
+    # Bộ đệm xác suất tại snapshot (Scalar/Vector Storage Optimization theo Chương 5)
     probs_tilde = exp_logits / np.sum(exp_logits, axis=1, keepdims=True)  # (n, K)
 
-    # One-hot encoding
+    # Tạo ma trận One-hot để tính gradient nhanh
     one_hot = np.zeros((n, K))
     one_hot[np.arange(n), y] = 1.0
 
-    # Gradient: (1/n) sum (probs_i - e_{y_i}) otimes x_i + lam * W
-    mu = (X.T @ (probs_tilde - one_hot)) / n + lam * W_tilde  # (d, K)
+    # Full gradient mu chuẩn của vòng ngoài
+    mu = (X.T @ (probs_tilde - one_hot)) / n + lam * W_tilde       # (d, K)
 
-    # ── Step 2: Inner loop ──
+    # -------------------------------------------------------------------------
+    # BƯỚC 2: VÒNG LẶP NỘI (Inner Loop - Cập nhật nhanh)
+    # -------------------------------------------------------------------------
     W = W_tilde.copy()
-
-    if option == 'II':
-        W_history = [W.copy()]
-
-    # Variance tracking
+    
     variance_sum = 0.0
     variance_count = 0
 
     for t in range(m):
+        # Chọn mẫu ngẫu nhiên
         i = np.random.randint(n)
         xi = X[i]          # (d,)
         yi = y[i]
 
-        # nabla psi_i(W) for current w
-        logits_i = xi @ W                                # (K,)
+        # 2a. Tính nabla psi_i(W) tại trọng số hiện tại (Thời điểm t)
+        logits_i = xi @ W  # (K,)
         logits_i -= np.max(logits_i)
-        probs_i = np.exp(logits_i) / np.sum(np.exp(logits_i))  # (K,)
-
+        probs_i = np.exp(logits_i) / np.sum(np.exp(logits_i)) # (K,)
+        
         e_yi = np.zeros(K)
         e_yi[yi] = 1.0
+        g_current = np.outer(xi, probs_i - e_yi) + lam * W    # (d, K)
 
-        g_current = np.outer(xi, probs_i - e_yi) + lam * W  # (d, K)
-
-        # nabla psi_i(W_tilde) — using precomputed probabilities
+        # 2b. Tính nabla psi_i(W_tilde) - KHÔNG dùng phép nhân ma trận xi @ W_tilde
+        # Lấy trực tiếp từ bộ đệm probs_tilde đã tính ở vòng ngoài (Tối ưu theo bài báo)
         g_snapshot = np.outer(xi, probs_tilde[i] - e_yi) + lam * W_tilde  # (d, K)
 
+        # Hướng cập nhật SVRG
         v = g_current - g_snapshot + mu
 
+        # 2c. Đo phương sai tối ưu (Theo yêu cầu thực nghiệm của bạn)
         if track_variance:
-            # Tính chính xác full gradient tại W hiện tại
-            logits_current_full = X @ W
-            logits_current_full -= np.max(logits_current_full, axis=1, keepdims=True)
-            exp_logits_c = np.exp(logits_current_full)
-            probs_current_full = exp_logits_c / np.sum(exp_logits_c, axis=1, keepdims=True)
-            
-            E_v = (X.T @ (probs_current_full - one_hot)) / n + lam * W
-            
-            # Tính Variance cho ma trận (sum bình phương các phần tử)
-            diff = v - E_v
-            actual_update_variance = (lr ** 2) * np.sum(diff * diff)
-            
-            variance_sum += actual_update_variance
-            variance_count += 1
+            # THAY ĐỔI CỐT LÕI: Chỉ tính Full Gradient để làm E[v] nếu thỏa mãn sample_rate
+            # Giúp giảm chi phí tính toán từ 120,000 lần xuống còn 60 lần!
+            if t % var_sample_rate == 0:
+                logits_current_full = X @ W
+                logits_current_full -= np.max(logits_current_full, axis=1, keepdims=True)
+                exp_logits_c = np.exp(logits_current_full)
+                probs_current_full = exp_logits_c / np.sum(exp_logits_c, axis=1, keepdims=True)
+                
+                # E_v thực tế tại thời điểm t
+                E_v = (X.T @ (probs_current_full - one_hot)) / n + lam * W
+                
+                # Phương sai cập nhật thực tế: Var(lr * v)
+                diff = v - E_v
+                actual_update_variance = (lr ** 2) * np.sum(diff * diff)
+                
+                variance_sum += actual_update_variance
+                variance_count += 1
 
-        # SVRG update
+        # Cập nhật trọng số SVRG
         W = W - lr * v
 
-        if option == 'II':
-            W_history.append(W.copy())
-
-    if option == 'I':
-        result = W
-    else:
-        idx = np.random.randint(m)    # {w_0, ..., w_{m-1}} per spec
-        result = W_history[idx]
-
+    # Theo chương 5: Trả về W cuối cùng hoạt động rất tốt (Option I)
     if track_variance:
         variance_estimate = variance_sum / max(variance_count, 1)
-        return result, variance_estimate
-    return result
-
+        return W, variance_estimate
+    return W
 
 # ---------------------------------------------------------------------------
 # Unified Interface
