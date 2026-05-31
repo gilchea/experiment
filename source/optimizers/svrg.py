@@ -76,12 +76,12 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
         # SVRG update direction: v = g_current - g_snapshot + mu
         v = g_current - g_snapshot + mu
 
-        # Track variance: Var[v] = E[||v - E[v]||²]
+        # Track variance: Var[v] = lr * E[||v - E[v]||²]
         # Since E[v] ≈ mu (full gradient at current snapshot),
         # we estimate variance as average squared deviation from mu
         if track_variance:
             diff = v - mu
-            variance_sum += np.dot(diff, diff)
+            variance_sum += lr * np.dot(diff, diff)
             variance_count += 1
 
         # SVRG update: w = w - lr * v
@@ -177,10 +177,10 @@ def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
         # SVRG update direction
         v = g_current - g_snapshot + mu
 
-        # Track variance: Var[v] = E[||v - E[v]||²]
+        # Track variance: Var[v] = lr * (E[||v - E[v]||²])
         if track_variance:
             diff = v - mu
-            variance_sum += np.sum(diff * diff)
+            variance_sum += lr * np.sum(diff * diff)
             variance_count += 1
 
         # SVRG update
