@@ -17,7 +17,7 @@ from models.logistic import sigmoid
 # ---------------------------------------------------------------------------
 
 def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
-                           track_variance=False):
+                           track_variance=True):
     """One outer iteration of SVRG for binary logistic regression.
 
     Uses scalar storage optimization: precompute phi'(w_tilde^T x_i) for all i
@@ -73,15 +73,22 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
         # = phi'_i(z_i) * x_i + lam * w_tilde
         g_snapshot = phi_prime_tilde[i] * xi + lam * w_tilde
 
-        # SVRG update direction: v = g_current - g_snapshot + mu
+        # 1. Tính toán SVRG update direction 'v' như bạn đã làm
         v = g_current - g_snapshot + mu
 
-        # Track variance: Var[v] = E[||v - E[v]||²]
-        # Since E[v] ≈ mu (full gradient at current snapshot),
-        # we estimate variance as average squared deviation from mu
         if track_variance:
-            diff = v - mu
-            variance_sum += np.dot(diff, diff)
+            # Tính chính xác full gradient tại vị trí w_{t-1} hiện tại để làm kỳ vọng E[v]
+            z_current_full = X @ w
+            phi_prime_current_full = -y * sigmoid(-y * z_current_full)
+            E_v = (X.T @ phi_prime_current_full) / n + lam * w  # Đây mới là E[v] chuẩn
+            
+            # Tính Variance của update (bao gồm cả learning rate lr giống bài báo)
+            # Var(lr * v) = lr^2 * E[||v - E[v]||^2]
+            diff = v - E_v
+            # actual_update_variance = (lr ** 2) * np.dot(diff, diff)
+            actual_update_variance = (lr ** 2) * np.sum(diff * diff)
+            
+            variance_sum += actual_update_variance
             variance_count += 1
 
         # SVRG update: w = w - lr * v
@@ -108,7 +115,7 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
 # ---------------------------------------------------------------------------
 
 def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
-                               track_variance=False):
+                               track_variance=True):
     """One outer iteration of SVRG for multi-class logistic regression.
 
     For multi-class with K classes, W is (d, K).
@@ -174,13 +181,22 @@ def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
         # nabla psi_i(W_tilde) — using precomputed probabilities
         g_snapshot = np.outer(xi, probs_tilde[i] - e_yi) + lam * W_tilde  # (d, K)
 
-        # SVRG update direction
         v = g_current - g_snapshot + mu
 
-        # Track variance: Var[v] = E[||v - E[v]||²]
         if track_variance:
-            diff = v - mu
-            variance_sum += np.sum(diff * diff)
+            # Tính chính xác full gradient tại W hiện tại
+            logits_current_full = X @ W
+            logits_current_full -= np.max(logits_current_full, axis=1, keepdims=True)
+            exp_logits_c = np.exp(logits_current_full)
+            probs_current_full = exp_logits_c / np.sum(exp_logits_c, axis=1, keepdims=True)
+            
+            E_v = (X.T @ (probs_current_full - one_hot)) / n + lam * W
+            
+            # Tính Variance cho ma trận (sum bình phương các phần tử)
+            diff = v - E_v
+            actual_update_variance = (lr ** 2) * np.sum(diff * diff)
+            
+            variance_sum += actual_update_variance
             variance_count += 1
 
         # SVRG update
@@ -206,7 +222,7 @@ def svrg_outer_loop_multiclass(W_tilde, X, y, lr, lam, m, option='I',
 # ---------------------------------------------------------------------------
 
 def svrg_outer_loop(w, X, y, lr, lam, m, multiclass=False, option='I',
-                    track_variance=False):
+                    track_variance=True):
     """One outer iteration of SVRG.
 
     Args:

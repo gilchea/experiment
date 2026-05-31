@@ -164,13 +164,14 @@ def run_svrg(w_init, X_train, y_train, X_test, y_test,
                        lr=config['warm_start_lr'])
         ep_offset = float(config['warm_start_epochs'])
 
-    result = {'passes': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
+    result = {'passes': [], 'loss': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
 
     # Log trạng thái ban đầu
     def _log(ep, variance=None):
         tl  = loss(w, X_train, y_train, lam, multiclass)
         ter = compute_test_error(w, X_test, y_test, multiclass)
         result['passes'].append(ep)
+        result['loss'].append(float(tl))
         result['loss_residual'].append(float(tl - P_star))
         result['test_error'].append(float(ter))
         result['grad_variance'].append(float(variance) if variance is not None else None)
@@ -210,32 +211,35 @@ def run_sgd_const(w_init, X_train, y_train, X_test, y_test,
 
     w      = w_init.copy()
     ep     = 0.0
-    result = {'passes': [], 'loss_residual': [], 'test_error': []}
+    result = {'passes': [], 'loss': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
 
-    def _log(ep):
+    # Log trạng thái ban đầu
+    def _log(ep, variance=None):
         tl  = loss(w, X_train, y_train, lam, multiclass)
         ter = compute_test_error(w, X_test, y_test, multiclass)
         result['passes'].append(ep)
+        result['loss'].append(float(tl))
         result['loss_residual'].append(float(tl - P_star))
         result['test_error'].append(float(ter))
+        result['grad_variance'].append(float(variance) if variance is not None else None)
         return tl, ter
 
     _log(ep)
 
     for epoch in range(config['n_epochs_sgd']):
-        w   = sgd_epoch_constant(w, X_train, y_train,
+        w, variance = sgd_epoch_constant(w, X_train, y_train,
                                  lr=config['sgd_const_lr'],
-                                 lam=lam, multiclass=multiclass)
+                                 lam=lam, multiclass=multiclass, track_variance=True)
         ep += 1.0
-        tl, ter = _log(ep)
+        tl, ter = _log(ep, variance)
 
         if (epoch + 1) % save_ckpt_every == 0:
             save_checkpoint('sgd_const', dataset_name, w, ep,
-                            tl, ter, epoch=epoch + 1)
+                            tl, ter, variance, epoch=epoch + 1)
             clean_checkpoints('sgd_const', dataset_name)
 
         if (epoch + 1) % 10 == 0:
-            print(f"    epoch {epoch+1:3d} | residual={tl-P_star:.2e} | err={ter:.2f}%")
+            print(f"    epoch {epoch+1:3d} | residual={tl-P_star:.2e} | err={ter:.2f}% | var={variance:.2e}" )
 
     return result
 
@@ -253,34 +257,36 @@ def run_sgd_best(w_init, X_train, y_train, X_test, y_test,
     w      = w_init.copy()
     ep     = 0.0
     t      = 0
-    result = {'passes': [], 'loss_residual': [], 'test_error': []}
+    result = {'passes': [], 'loss': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
 
-    def _log(ep):
+    def _log(ep, variance=None):
         tl  = loss(w, X_train, y_train, lam, multiclass)
         ter = compute_test_error(w, X_test, y_test, multiclass)
         result['passes'].append(ep)
+        result['loss'].append(float(tl))
         result['loss_residual'].append(float(tl - P_star))
         result['test_error'].append(float(ter))
+        result['grad_variance'].append(float(variance) if variance is not None else None)  # Placeholder, không track variance cho SGD-best
         return tl, ter
 
     _log(ep)
 
     for epoch in range(config['n_epochs_sgd']):
-        w, t = sgd_epoch_decay(w, X_train, y_train,
-                               lr0=config['sgd_best_lr0'],
-                               lam=lam, n=n, t_start=t,
-                               b=config['sgd_best_b'],
-                               multiclass=multiclass)
+        w, t, variance = sgd_epoch_decay(w, X_train, y_train,
+                                          lr0=config['sgd_best_lr0'],
+                                          lam=lam, n=n, t_start=t,
+                                          b=config['sgd_best_b'],
+                               multiclass=multiclass, track_variance=True)
         ep += 1.0
-        tl, ter = _log(ep)
+        tl, ter = _log(ep, variance)
 
         if (epoch + 1) % save_ckpt_every == 0:
             save_checkpoint('sgd_best', dataset_name, w, ep,
-                            tl, ter, epoch=epoch + 1)
+                            tl, ter, variance, epoch=epoch + 1)
             clean_checkpoints('sgd_best', dataset_name)
 
         if (epoch + 1) % 10 == 0:
-            print(f"    epoch {epoch+1:3d} | residual={tl-P_star:.2e} | err={ter:.2f}%")
+            print(f"    epoch {epoch+1:3d} | residual={tl-P_star:.2e} | err={ter:.2f}% | var={variance:.2e}")
 
     return result
 

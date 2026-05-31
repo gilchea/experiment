@@ -11,19 +11,21 @@ Per PROCEDURE_SGD_.md:
 """
 
 import numpy as np
-from models.logistic import stoch_grad_binary, stoch_grad_multiclass
+from models.logistic import stoch_grad, full_grad
 
+# def _get_stoch_grad_fn(multiclass):
+#     """Return appropriate stochastic gradient function."""
+#     return stoch_grad_multiclass if multiclass else stoch_grad_binary
 
-def _get_stoch_grad_fn(multiclass):
-    """Return appropriate stochastic gradient function."""
-    return stoch_grad_multiclass if multiclass else stoch_grad_binary
+# def _get_full_grad_fn(multiclass):
+#     """Return appropriate full gradient function."""
+#     return grad_full_multiclass if multiclass else grad_full_binary
 
 
 # ---------------------------------------------------------------------------
 # SGD with Constant Learning Rate
 # ---------------------------------------------------------------------------
-
-def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False):
+def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False, track_variance=True):
     """Run 1 epoch of SGD with constant learning rate.
 
     Per spec: batch_size = 1, w^(t) = w^(t-1) - eta * grad_psi_i(w^(t-1))
@@ -35,22 +37,39 @@ def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False):
         lr         : constant learning rate eta
         lam        : L2 regularization strength
         multiclass : whether multi-class
+        track_variance : whether to track gradient variance
 
     Returns:
-        updated w after 1 epoch
+        updated w, epoch_variance
     """
     n = len(y)
-    stoch_grad = _get_stoch_grad_fn(multiclass)
+    
     indices = np.random.permutation(n)
+    variance_sum = 0.0
+    variance_count = 0
 
     for i in indices:
-        g = stoch_grad(w, X[i], y[i], lam)
+        # 1. Lấy gradient ngẫu nhiên của mẫu i
+        g = stoch_grad(w, X[i], y[i], lam, multiclass)
+
+        # 2. Đo đạc phương sai (nếu bật tính năng track)
+        if track_variance:
+            # E[g] chính là full gradient của toàn bộ tập dữ liệu tại điểm w hiện tại
+            E_g = full_grad(w, X, y, lam, multiclass)
+            diff = g - E_g
+            # Var(lr * g) = lr^2 * ||g - E[g]||^2
+            # np.sum(diff * diff) hoạt động đúng cho cả vector (Binary) và matrix (Multiclass)
+            actual_update_variance = (lr ** 2) * np.sum(diff * diff)
+            variance_sum += actual_update_variance
+            variance_count += 1
+
+        # 3. Cập nhật trọng số
         w = w - lr * g
 
-    return w
+    epoch_variance = variance_sum / max(variance_count, 1) if track_variance else 0.0
+    return w, epoch_variance
 
-
-def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None):
+def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None, track_variance=True):
     """Run multiple epochs of SGD with constant learning rate.
 
     Args:
@@ -62,14 +81,24 @@ def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None):
         n_epochs   : number of epochs
         multiclass : multi-class flag
         callback   : optional function(w, epoch) called after each epoch
+        track_variance : whether to track gradient variance
 
-    Returns:
-        final weights
+     Returns:
+            Nếu track_variance=False: trả về final_w
+            Nếu track_variance=True : trả về (final_w, danh_sách_variance_qua_mỗi_epoch)   
     """
+
+    variances = []
     for epoch in range(n_epochs):
-        w = sgd_epoch_constant(w, X, y, lr, lam, multiclass)
+        w, epoch_var = sgd_epoch_constant(w, X, y, lr, lam, multiclass, track_variance)
+        if track_variance:
+            variances.append(epoch_var)
         if callback:
             callback(w, epoch)
+
+    if track_variance:
+        return w, variances
+    
     return w
 
 
@@ -77,7 +106,7 @@ def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None):
 # SGD with Decaying Learning Rate  (SGD-best)
 # ---------------------------------------------------------------------------
 
-def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False):
+def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False, track_variance=True):
     """Run 1 epoch of SGD with t-inverse decaying learning rate.
 
     Per PROCEDURE_SGD_.md, t-inverse schedule:
@@ -98,21 +127,37 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False):
     Returns:
         (updated w, t_end)
     """
-    stoch_grad = _get_stoch_grad_fn(multiclass)
     indices = np.random.permutation(n)
     t = t_start
+
+    variance_sum = 0.0
+    variance_count = 0
     
     for i in indices:
-        # Exponential decay per paper
+        # Tính toán học tốc tại bước t
         lr_t = lr0 * (a ** (t // n))
-        g = stoch_grad(w, X[i], y[i], lam)
+        
+        # 1. Lấy gradient ngẫu nhiên của mẫu i
+        g = stoch_grad(w, X[i], y[i], lam, multiclass)
+        
+        # 2. Đo đạc phương sai (nếu bật tính năng track)
+        if track_variance:
+            E_g = full_grad(w, X, y, lam, multiclass)
+            diff = g - E_g
+            # Định nghĩa thực nghiệm gốc bao gồm biến thiên học tốc: Var(lr_t * g)
+            actual_update_variance = (lr_t ** 2) * np.sum(diff * diff)
+            variance_sum += actual_update_variance
+            variance_count += 1
+
+        # 3. Cập nhật trọng số
         w = w - lr_t * g
         t += 1
 
-    return w, t
+    epoch_variance = variance_sum / max(variance_count, 1) if track_variance else 0.0
+    return w, t, epoch_variance
 
 
-def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False, callback=None):
+def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False, callback=None, track_variance=True):
     """Run multiple epochs of SGD with t-inverse decaying learning rate.
 
     Args:
@@ -125,16 +170,24 @@ def sgd_decay(w, X, y, lr0, lam, n_epochs, a, multiclass=False, callback=None):
         a          : decay parameter
         multiclass : multi-class flag
         callback   : optional function(w, epoch) called after each epoch
+        track_variance : whether to track gradient variance
 
     Returns:
         final weights
     """
     n = len(y)
     t = 0
+    variances = []
+    
     for epoch in range(n_epochs):
-        w, t = sgd_epoch_decay(w, X, y, lr0, lam, n, t, a, multiclass)
+        w, t, epoch_var = sgd_epoch_decay(w, X, y, lr0, lam, n, t, a, multiclass, track_variance)
+        if track_variance:
+            variances.append(epoch_var)
         if callback:
             callback(w, epoch)
+            
+    if track_variance:
+        return w, variances
     return w
 
 
@@ -163,7 +216,7 @@ def warm_start(X, y, lam, multiclass=False, n_epochs=1, lr=0.01):
     else:
         w = np.zeros(d)
 
-    return sgd_constant(w, X, y, lr, lam, n_epochs, multiclass)
+    return sgd_constant(w, X, y, lr, lam, n_epochs, multiclass, track_variance=False)
 
 
 # ---------------------------------------------------------------------------

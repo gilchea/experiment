@@ -18,17 +18,17 @@ DATASET_CONFIGS = {
         'sgd_best_lr0': 0.1,
         'sgd_best_b': 1.0,            # Tune this parameter
         # SDCA
-        'sdca_lr': 0.025,
+        # 'sdca_lr': 0.025,
         # SAG
-        'sag_lr': 0.01,
+        # 'sag_lr': 0.01,
         # Warm-start
         'warm_start_epochs': 1,
         'warm_start_lr': 0.01,
         # Epochs
-        'n_outer': 30,                # SVRG outer iterations
-        'n_epochs_sgd': 90,           # SGD epochs (match effective passes)
-        'n_epochs_sdca': 90,          # SDCA epochs
-        'n_epochs_sag': 90,           # SAG epochs
+        'n_outer': 33,                # SVRG outer iterations
+        'n_epochs_sgd': 99,           # SGD epochs (match effective passes)
+        # 'n_epochs_sdca': 90,          # SDCA epochs
+        # 'n_epochs_sag': 90,           # SAG epochs
     },
     'cifar10': {
         'lam': 1e-3,
@@ -42,17 +42,17 @@ DATASET_CONFIGS = {
         'sgd_best_lr0': 0.1,
         'sgd_best_b': 1.0,
         # SDCA
-        'sdca_lr': 1.0,
+        # 'sdca_lr': 1.0,
         # SAG
-        'sag_lr': 0.01,
+        # 'sag_lr': 0.01,
         # Warm-start
         'warm_start_epochs': 1,
         'warm_start_lr': 0.01,
         # Epochs
-        'n_outer': 30,
-        'n_epochs_sgd': 90,
-        'n_epochs_sdca': 90,
-        'n_epochs_sag': 90,
+        'n_outer': 33,
+        'n_epochs_sgd': 99,
+        # 'n_epochs_sdca': 90,
+        # 'n_epochs_sag': 90,
     },
     'rcv1': {
         'lam': 1e-5,
@@ -66,17 +66,17 @@ DATASET_CONFIGS = {
         'sgd_best_lr0': 0.01,
         'sgd_best_b': 1.0,
         # SDCA
-        'sdca_lr': 1.0,
+        # 'sdca_lr': 1.0,
         # SAG
-        'sag_lr': 0.001,
+        # 'sag_lr': 0.001,
         # Warm-start
         'warm_start_epochs': 1,
         'warm_start_lr': 0.01,
         # Epochs
-        'n_outer': 30,
-        'n_epochs_sgd': 90,
-        'n_epochs_sdca': 90,
-        'n_epochs_sag': 90,
+        'n_outer': 33,
+        'n_epochs_sgd': 99,
+                # 'n_epochs_sdca': 90,
+                # 'n_epochs_sag': 90,
     },
     'covtype': {
         'lam': 1e-5,
@@ -90,17 +90,17 @@ DATASET_CONFIGS = {
         'sgd_best_lr0': 0.01,
         'sgd_best_b': 1.0,
         # SDCA
-        'sdca_lr': 1.0,
+        # 'sdca_lr': 1.0,
         # SAG
-        'sag_lr': 0.001,
+        # 'sag_lr': 0.001,
         # Warm-start
         'warm_start_epochs': 1,
         'warm_start_lr': 0.01,
         # Epochs
-        'n_outer': 30,
-        'n_epochs_sgd': 90,
-        'n_epochs_sdca': 90,
-        'n_epochs_sag': 90,
+        'n_outer': 33,
+        'n_epochs_sgd': 99,
+        # 'n_epochs_sdca': 90,
+        # 'n_epochs_sag': 90,
     },
 }
 
