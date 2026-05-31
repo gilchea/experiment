@@ -63,7 +63,7 @@ Thay thế các kết quả này ngược trở lại biểu thức tổng quát
 Tại mỗi bước lặp ngẫu nhiên đơn lẻ, kỳ vọng toán học của ước lượng SVRG luôn trùng khớp với vectơ gradient toàn cục $\nabla P(w_{t-1})$. Đặc tính này khẳng định SVRG bản chất hình học của phương pháp trượt gradient, đồng thời tạo cơ sở cho các phân tích hội tụ.
 
 
-\section{Phương sai được thu gọn}
+\section{Phương sai thu gọn}
 
 
 Mặc dù có cùng kỳ vọng không chệch như SGD cổ điển, sự khác biệt mang tính cách mạng của SVRG nằm ở cấu trúc toán học của phương sai ước lượng. Phân tích định lượng của Johnson và Zhang \cite{johnson2013accelerating} chỉ ra rằng, đại lượng phương sai của ước lượng gradient $v_t$ được kiểm soát và thu hẹp dựa trên khoảng cách giữa điểm lặp hiện tại $w_{t-1}$ và điểm chụp $\tilde{w}$.

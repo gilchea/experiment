@@ -81,7 +81,8 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
         # we estimate variance as average squared deviation from mu
         if track_variance:
             diff = v - mu
-            variance_sum += lr * np.dot(diff, diff)
+            # variance_sum += lr * np.dot(diff, diff)
+            variance_sum += lr * np.sum(diff * diff)
             variance_count += 1
 
         # SVRG update: w = w - lr * v
