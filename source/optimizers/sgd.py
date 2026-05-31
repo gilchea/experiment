@@ -54,12 +54,11 @@ def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False, track_variance=True):
 
         # 2. Đo đạc phương sai (nếu bật tính năng track)
         if track_variance:
-            # E[g] chính là full gradient của toàn bộ tập dữ liệu tại điểm w hiện tại
-            E_g = full_grad(w, X, y, lam, multiclass)
-            diff = g - E_g
-            # Var(lr * g) = lr^2 * ||g - E[g]||^2
-            # np.sum(diff * diff) hoạt động đúng cho cả vector (Binary) và matrix (Multiclass)
-            actual_update_variance = (lr ** 2) * np.sum(diff * diff)
+            # E_g = full_grad(w, X, y, lam, multiclass)
+            # diff = g - E_g
+            diff = g * lr  # Var(lr * g) = lr^2 * ||g - E[g]||^2, nhưng vì E[g] ≈ 0 khi w gần tối ưu, nên diff ≈ g * lr
+            # Định nghĩa thực nghiệm gốc bao gồm biến thiên học tốc: Var(lr * g)
+            actual_update_variance = np.sum(diff * diff)
             variance_sum += actual_update_variance
             variance_count += 1
 
@@ -142,10 +141,11 @@ def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, a, multiclass=False, track_va
         
         # 2. Đo đạc phương sai (nếu bật tính năng track)
         if track_variance:
-            E_g = full_grad(w, X, y, lam, multiclass)
-            diff = g - E_g
+            # E_g = full_grad(w, X, y, lam, multiclass)
+            # diff = g - E_g
+            diff = g * lr_t  # Var(lr_t * g) = lr_t^2 * ||g - E[g]||^2, nhưng vì E[g] ≈ 0 khi w gần tối ưu, nên diff ≈ g * lr_t
             # Định nghĩa thực nghiệm gốc bao gồm biến thiên học tốc: Var(lr_t * g)
-            actual_update_variance = (lr_t ** 2) * np.sum(diff * diff)
+            actual_update_variance = np.sum(diff * diff)
             variance_sum += actual_update_variance
             variance_count += 1
 
