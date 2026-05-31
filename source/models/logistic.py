@@ -1,8 +1,9 @@
 """
 logistic.py — L2-Regularized Logistic Regression (Binary + Multi-class)
 
-Provides loss, full gradient, and stochastic gradient for both binary
-(y in {-1, +1}) and multi-class (y in {0..K-1}) logistic regression.
+Provides loss, full gradient, and stochastic gradient for:
+  - Binary logistic regression:    y in {-1, +1}
+  - Multi-class logistic regression: y in {0, ..., K-1}
 """
 
 import numpy as np
@@ -13,7 +14,7 @@ import numpy as np
 # ---------------------------------------------------------------------------
 
 def sigmoid(x):
-    """Numerically stable sigmoid function."""
+    """Numerically stable sigmoid: 1 / (1 + exp(-x))."""
     x = np.clip(x, -100, 100)
     return 1.0 / (1.0 + np.exp(-x))
 
@@ -22,10 +23,10 @@ def softmax(logits):
     """Numerically stable softmax.
 
     Args:
-        logits: (n, K) or (K,) array of logits
+        logits: array of shape (n, K) or (K,)
 
     Returns:
-        probabilities of same shape
+        probabilities of the same shape
     """
     shifted = logits - np.max(logits, axis=-1, keepdims=True)
     exp_shifted = np.exp(shifted)
@@ -37,53 +38,51 @@ def softmax(logits):
 # ---------------------------------------------------------------------------
 
 def loss_binary(w, X, y, lam):
-    """P(w) for binary logistic regression.
+    """Compute loss P(w) for binary logistic regression.
+
+    P(w) = (1/n) sum log(1 + exp(-y_i * w^T x_i)) + (lam/2) ||w||^2
 
     Args:
-        w: weight vector (d,)
-        X: feature matrix (n, d) — dense or sparse
-        y: label vector (n,) with values in {-1, +1}
+        w:   weight vector (d,)
+        X:   feature matrix (n, d), dense or sparse
+        y:   label vector (n,) with values in {-1, +1}
         lam: L2 regularization strength
 
     Returns:
         scalar loss value
     """
-    n = len(y)
-    margins = y * (X @ w)               # (n,)
-    # Numerically stable log(1 + exp(-z))
-    log_part = np.log1p(np.exp(-np.abs(margins))) + np.maximum(0, -margins)
-    return np.mean(log_part) + 0.5 * lam * np.dot(w, w)
+    margins = y * (X @ w)
+    log_loss = np.log1p(np.exp(-np.abs(margins))) + np.maximum(0.0, -margins)
+    return np.mean(log_loss) + 0.5 * lam * np.dot(w, w)
 
 
 def full_grad_binary(w, X, y, lam):
-    """Full gradient ∇P(w).
+    """Compute full gradient ∇P(w) for binary logistic regression.
 
-    ∇P(w) = (1/n) Σ ∇ψ_i(w) + λw
-    ∇ψ_i(w) = -y_i * σ(-y_i w^T x_i) * x_i
+    ∇P(w) = (1/n) sum [-y_i * sigmoid(-y_i w^T x_i) * x_i] + lam * w
 
     Args:
-        w: weight vector (d,)
-        X: feature matrix (n, d) — dense or sparse
-        y: label vector (n,) with values in {-1, +1}
+        w:   weight vector (d,)
+        X:   feature matrix (n, d), dense or sparse
+        y:   label vector (n,) with values in {-1, +1}
         lam: L2 regularization strength
 
     Returns:
         gradient vector (d,)
     """
     n = len(y)
-    margins = y * (X @ w)               # (n,)
-    coefs = -y * sigmoid(-margins)      # (n,)
-    grad_data = X.T @ coefs / n         # (d,)
-    return grad_data + lam * w
+    margins = y * (X @ w)
+    coefs = -y * sigmoid(-margins)
+    return X.T @ coefs / n + lam * w
 
 
 def stoch_grad_binary(w, xi, yi, lam):
-    """Stochastic gradient ∇ψ_i(w) for a single sample.
+    """Compute stochastic gradient ∇ψ_i(w) for a single sample.
 
     Args:
-        w: weight vector (d,)
-        xi: single sample features (d,) — dense or sparse
-        yi: single label in {-1, +1}
+        w:   weight vector (d,)
+        xi:  feature vector for sample i (d,), dense or sparse
+        yi:  label for sample i in {-1, +1}
         lam: L2 regularization strength
 
     Returns:
@@ -95,44 +94,42 @@ def stoch_grad_binary(w, xi, yi, lam):
 
 
 # ---------------------------------------------------------------------------
-# Multi-class Logistic Regression  (y in {0..K-1})
+# Multi-class Logistic Regression  (y in {0, ..., K-1})
 # ---------------------------------------------------------------------------
 
 def loss_multiclass(W, X, y, lam):
-    """P(W) for multi-class logistic regression (softmax + cross-entropy).
+    """Compute loss P(W) for multi-class logistic regression (softmax cross-entropy).
+
+    P(W) = (1/n) sum [-logits[y_i] + log(sum exp(logits))] + (lam/2) ||W||^2
 
     Args:
-        W: weight matrix (d, K)
-        X: feature matrix (n, d)
-        y: label vector (n,) with values in {0, ..., K-1}
+        W:   weight matrix (d, K)
+        X:   feature matrix (n, d)
+        y:   label vector (n,) with values in {0, ..., K-1}
         lam: L2 regularization strength
 
     Returns:
         scalar loss value
     """
     n = len(y)
-    K = W.shape[1]
-    logits = X @ W                          # (n, K)
-
-    # Log-sum-exp stability for cross-entropy
+    logits = X @ W                                                       # (n, K)
     logits_max = np.max(logits, axis=1, keepdims=True)
-    log_sum_exp = logits_max + np.log(np.sum(np.exp(logits - logits_max), axis=1, keepdims=True))
-    
-    # Loss = average over i of [log(sum(exp(logits))) - logits[y_i]]
+    log_sum_exp = logits_max + np.log(
+        np.sum(np.exp(logits - logits_max), axis=1, keepdims=True)
+    )
     loss_data = np.mean(log_sum_exp.ravel() - logits[np.arange(n), y])
-    reg = 0.5 * lam * np.sum(W * W)
-    return loss_data + reg
+    return loss_data + 0.5 * lam * np.sum(W * W)
 
 
 def full_grad_multiclass(W, X, y, lam):
-    """Full gradient for multi-class logistic regression.
+    """Compute full gradient ∇P(W) for multi-class logistic regression.
 
-    ∇P(W) = (1/n) Σ (softmax(W^T x_i) - e_{y_i}) ⊗ x_i + λW
+    ∇P(W) = (1/n) sum (softmax(W^T x_i) - e_{y_i}) ⊗ x_i + lam * W
 
     Args:
-        W: weight matrix (d, K)
-        X: feature matrix (n, d)
-        y: label vector (n,) with values in {0, ..., K-1}
+        W:   weight matrix (d, K)
+        X:   feature matrix (n, d)
+        y:   label vector (n,) with values in {0, ..., K-1}
         lam: L2 regularization strength
 
     Returns:
@@ -140,37 +137,33 @@ def full_grad_multiclass(W, X, y, lam):
     """
     n = len(y)
     K = W.shape[1]
-    logits = X @ W                          # (n, K)
-    probs = softmax(logits)                 # (n, K)
+    probs = softmax(X @ W)                                               # (n, K)
 
     one_hot = np.zeros((n, K))
     one_hot[np.arange(n), y] = 1.0
 
-    grad_data = X.T @ (probs - one_hot) / n  # (d, K)
-    return grad_data + lam * W
+    return X.T @ (probs - one_hot) / n + lam * W
 
 
 def stoch_grad_multiclass(W, xi, yi, lam):
-    """Stochastic gradient for a single sample.
+    """Compute stochastic gradient ∇ψ_i(W) for a single sample.
 
     Args:
-        W: weight matrix (d, K)
-        xi: single sample (d,)
-        yi: label in {0, ..., K-1}
+        W:   weight matrix (d, K)
+        xi:  feature vector for sample i (d,)
+        yi:  label for sample i in {0, ..., K-1}
         lam: L2 regularization strength
 
     Returns:
         gradient matrix (d, K)
     """
     K = W.shape[1]
-    logits = xi @ W                         # (K,)
-    probs = softmax(logits)                 # (K,)
+    probs = softmax(xi @ W)                                              # (K,)
 
     one_hot = np.zeros(K)
     one_hot[yi] = 1.0
 
-    grad = np.outer(xi, probs - one_hot)    # (d, K)
-    return grad + lam * W
+    return np.outer(xi, probs - one_hot) + lam * W
 
 
 # ---------------------------------------------------------------------------
@@ -178,21 +171,21 @@ def stoch_grad_multiclass(W, xi, yi, lam):
 # ---------------------------------------------------------------------------
 
 def loss(w, X, y, lam, multiclass=False):
-    """Unified loss function."""
+    """Compute loss P(w). Dispatches to binary or multi-class variant."""
     if multiclass:
         return loss_multiclass(w, X, y, lam)
     return loss_binary(w, X, y, lam)
 
 
 def full_grad(w, X, y, lam, multiclass=False):
-    """Unified full gradient."""
+    """Compute full gradient ∇P(w). Dispatches to binary or multi-class variant."""
     if multiclass:
         return full_grad_multiclass(w, X, y, lam)
     return full_grad_binary(w, X, y, lam)
 
 
 def stoch_grad(w, xi, yi, lam, multiclass=False):
-    """Unified stochastic gradient."""
+    """Compute stochastic gradient ∇ψ_i(w). Dispatches to binary or multi-class variant."""
     if multiclass:
         return stoch_grad_multiclass(w, xi, yi, lam)
     return stoch_grad_binary(w, xi, yi, lam)

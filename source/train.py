@@ -1,32 +1,33 @@
 """
 train.py — Flexible Training Runner
 
-Cho phép chạy từng dataset, từng model, learning rate tuỳ chỉnh qua CLI.
+Run experiments for any combination of datasets and optimizers via CLI.
 
-Cách dùng:
-  # Chạy tất cả dataset, tất cả model (mặc định)
-  python train.py
+Usage examples:
+    # Run all datasets, all models (default)
+    python train.py
 
-  # Chỉ chạy 1 dataset
-  python train.py --dataset mnist
+    # Single dataset
+    python train.py --dataset mnist
 
-  # Chỉ chạy 1 model
-  python train.py --model svrg
+    # Single optimizer
+    python train.py --model svrg
 
-  # Chỉ chạy dataset + model cụ thể, override learning rate
-  python train.py --dataset mnist --model svrg --lr 0.01
+    # Dataset + model + override learning rate
+    python train.py --dataset mnist --model svrg --lr 0.01
 
-  # Override nhiều hyper-param cùng lúc
-  python train.py --dataset mnist --model sgd_const --lr 0.05 --epochs 30
+    # Override multiple hyperparameters
+    python train.py --dataset mnist --model sgd_const --lr 0.05 --epochs 30
 
-  # Liệt kê dataset/model hợp lệ
-  python train.py --list
+    # List valid datasets and models
+    python train.py --list
 """
 
 import os
 import json
 import pickle
 import argparse
+
 import numpy as np
 
 from utils.data_loader import load_dataset
@@ -35,7 +36,7 @@ from optimizers.sgd import sgd_epoch_constant, sgd_epoch_decay, warm_start
 from optimizers.svrg import svrg_outer_loop, effective_passes_svrg
 from config import DATASET_CONFIGS
 
-VALID_MODELS = ['svrg', 'sgd_const', 'sgd_best']
+VALID_MODELS   = ['svrg', 'sgd_const', 'sgd_best']
 CHECKPOINT_DIR = 'checkpoints'
 
 
@@ -45,75 +46,67 @@ CHECKPOINT_DIR = 'checkpoints'
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description='Flexible training runner — chạy từng dataset / model / lr',
+        description='Flexible training runner — dataset / model / lr',
         formatter_class=argparse.RawTextHelpFormatter,
     )
-
     parser.add_argument(
-        '--dataset', '-d',
-        type=str, default=None,
-        help='Tên dataset cần chạy. Mặc định: chạy tất cả.\n'
-             f'Hợp lệ: {list(DATASET_CONFIGS.keys())}',
+        '--dataset', '-d', type=str, default=None,
+        help=f'Dataset to run. Default: all.\nValid: {list(DATASET_CONFIGS.keys())}',
     )
     parser.add_argument(
-        '--model', '-m',
-        type=str, default=None,
-        choices=VALID_MODELS + [None],
-        help='Model cần chạy. Mặc định: chạy tất cả.\n'
-             f'Hợp lệ: {VALID_MODELS}',
+        '--model', '-m', type=str, default=None, choices=VALID_MODELS + [None],
+        help=f'Optimizer to run. Default: all.\nValid: {VALID_MODELS}',
     )
     parser.add_argument(
         '--lr', type=float, default=None,
-        help='Override learning rate cho model được chọn.\n'
-             'SVRG → svrg_lr | sgd_const → sgd_const_lr | sgd_best → sgd_best_lr0',
+        help=(
+            'Override learning rate for the selected model.\n'
+            'SVRG → svrg_lr | sgd_const → sgd_const_lr | sgd_best → sgd_best_lr0'
+        ),
     )
     parser.add_argument(
         '--epochs', type=int, default=None,
-        help='Override số epoch / outer iteration.',
+        help='Override number of epochs / outer iterations.',
     )
     parser.add_argument(
         '--lam', type=float, default=None,
-        help='Override regularisation lambda.',
+        help='Override regularization lambda.',
     )
     parser.add_argument(
         '--no-warmstart', action='store_true',
-        help='Bỏ qua warm-start (chỉ ảnh hưởng SVRG).',
+        help='Skip SVRG warm-start.',
     )
     parser.add_argument(
         '--results-dir', type=str, default='results',
-        help='Thư mục lưu kết quả (mặc định: results/).',
+        help='Directory for saving results (default: results/).',
     )
     parser.add_argument(
         '--save-ckpt-every', type=int, default=5,
-        help='Lưu checkpoint mỗi N epoch (mặc định: 5).',
+        help='Save a checkpoint every N epochs (default: 5).',
     )
     parser.add_argument(
         '--list', action='store_true',
-        help='In danh sách dataset và model hợp lệ rồi thoát.',
+        help='Print valid datasets and models, then exit.',
     )
-
     return parser.parse_args()
 
 
 # ---------------------------------------------------------------------------
-# Helpers — Test Error
+# Helpers
 # ---------------------------------------------------------------------------
 
 def compute_test_error(w, X_test, y_test, multiclass=False):
-    """Tính tỉ lệ lỗi trên tập test (%)."""
+    """Return test error rate (%) for the current weights."""
     if multiclass:
         preds = np.argmax(X_test @ w, axis=1)
     else:
         preds = np.sign(X_test @ w)
-    return np.mean(preds != y_test) * 100
+    return np.mean(preds != y_test) * 100.0
 
-
-# ---------------------------------------------------------------------------
-# Helpers — Checkpoint
-# ---------------------------------------------------------------------------
 
 def save_checkpoint(tag, dataset_name, w, passes, loss_val, test_err,
                     variance=None, epoch=0):
+    """Persist a training checkpoint to disk."""
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
     path = os.path.join(CHECKPOINT_DIR, f'{tag}_{dataset_name}_epoch{epoch}.pkl')
     with open(path, 'wb') as f:
@@ -125,6 +118,7 @@ def save_checkpoint(tag, dataset_name, w, passes, loss_val, test_err,
 
 
 def clean_checkpoints(tag, dataset_name, keep_last=2):
+    """Remove old checkpoints, keeping only the most recent `keep_last` files."""
     if not os.path.exists(CHECKPOINT_DIR):
         return
     prefix = f'{tag}_{dataset_name}_epoch'
@@ -138,13 +132,31 @@ def clean_checkpoints(tag, dataset_name, keep_last=2):
 
 
 # ---------------------------------------------------------------------------
-# Individual model runners
+# Model runners
 # ---------------------------------------------------------------------------
+
+def _make_result_dict():
+    return {'passes': [], 'loss': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
+
+
+def _log_state(result, w, passes, X_train, y_train, X_test, y_test, lam, multiclass, P_star, variance=None):
+    """Evaluate current weights and append metrics to result dict."""
+    train_loss = loss(w, X_train, y_train, lam, multiclass)
+    test_err   = compute_test_error(w, X_test, y_test, multiclass)
+
+    result['passes'].append(passes)
+    result['loss'].append(float(train_loss))
+    result['loss_residual'].append(float(train_loss - P_star))
+    result['test_error'].append(float(test_err))
+    result['grad_variance'].append(float(variance) if variance is not None else None)
+
+    return train_loss, test_err
+
 
 def run_svrg(w_init, X_train, y_train, X_test, y_test,
              config, P_star, dataset_name,
              save_ckpt_every=5, skip_warmstart=False):
-    """Chạy SVRG, trả về dict kết quả."""
+    """Run SVRG and return a results dict."""
     lam        = config['lam']
     multiclass = config['multiclass']
     n          = X_train.shape[0]
@@ -153,10 +165,8 @@ def run_svrg(w_init, X_train, y_train, X_test, y_test,
     print(f"\n  [SVRG] lr={config['svrg_lr']}, m={config['svrg_m_factor']}*n={m}, "
           f"outer_iters={config['n_outer']}")
 
-    # Warm-start
     if skip_warmstart:
-        w = w_init.copy()
-        ep_offset = 0.0
+        w, ep_offset = w_init.copy(), 0.0
     else:
         print(f"  Warm-start: {config['warm_start_epochs']} epoch(s)")
         w = warm_start(X_train, y_train, lam, multiclass,
@@ -164,20 +174,8 @@ def run_svrg(w_init, X_train, y_train, X_test, y_test,
                        lr=config['warm_start_lr'])
         ep_offset = float(config['warm_start_epochs'])
 
-    result = {'passes': [], 'loss': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
-
-    # Log trạng thái ban đầu
-    def _log(ep, variance=None):
-        tl  = loss(w, X_train, y_train, lam, multiclass)
-        ter = compute_test_error(w, X_test, y_test, multiclass)
-        result['passes'].append(ep)
-        result['loss'].append(float(tl))
-        result['loss_residual'].append(float(tl - P_star))
-        result['test_error'].append(float(ter))
-        result['grad_variance'].append(float(variance) if variance is not None else None)
-        return tl, ter
-
-    _log(ep_offset)
+    result = _make_result_dict()
+    _log_state(result, w, ep_offset, X_train, y_train, X_test, y_test, lam, multiclass, P_star)
 
     for s in range(config['n_outer']):
         w, variance = svrg_outer_loop(
@@ -186,67 +184,55 @@ def run_svrg(w_init, X_train, y_train, X_test, y_test,
             multiclass=multiclass, option='I', track_variance=True,
         )
         ep_offset += effective_passes_svrg(n, m)
-        tl, ter = _log(ep_offset, variance)
+        tl, ter = _log_state(result, w, ep_offset, X_train, y_train, X_test, y_test,
+                             lam, multiclass, P_star, variance)
 
         if (s + 1) % save_ckpt_every == 0:
-            save_checkpoint('svrg', dataset_name, w, ep_offset,
-                            tl, ter, variance, epoch=s + 1)
+            save_checkpoint('svrg', dataset_name, w, ep_offset, tl, ter, variance, epoch=s + 1)
             clean_checkpoints('svrg', dataset_name)
 
         if (s + 1) % 5 == 0:
-            print(f"    iter {s+1:3d} | residual={tl-P_star:.2e} "
-                  f"| err={ter:.2f}% | var={variance:.2e}")
+            print(f"    iter {s+1:3d} | residual={tl-P_star:.2e} | err={ter:.2f}% | var={variance:.2e}")
 
     return result
 
 
 def run_sgd_const(w_init, X_train, y_train, X_test, y_test,
                   config, P_star, dataset_name, save_ckpt_every=5):
-    """Chạy SGD với learning rate hằng số."""
+    """Run SGD with a constant learning rate and return a results dict."""
     lam        = config['lam']
     multiclass = config['multiclass']
 
-    print(f"\n  [SGD-const] lr={config['sgd_const_lr']}, "
-          f"epochs={config['n_epochs_sgd']}")
+    print(f"\n  [SGD-const] lr={config['sgd_const_lr']}, epochs={config['n_epochs_sgd']}")
 
     w      = w_init.copy()
     ep     = 0.0
-    result = {'passes': [], 'loss': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
-
-    # Log trạng thái ban đầu
-    def _log(ep, variance=None):
-        tl  = loss(w, X_train, y_train, lam, multiclass)
-        ter = compute_test_error(w, X_test, y_test, multiclass)
-        result['passes'].append(ep)
-        result['loss'].append(float(tl))
-        result['loss_residual'].append(float(tl - P_star))
-        result['test_error'].append(float(ter))
-        result['grad_variance'].append(float(variance) if variance is not None else None)
-        return tl, ter
-
-    _log(ep)
+    result = _make_result_dict()
+    _log_state(result, w, ep, X_train, y_train, X_test, y_test, lam, multiclass, P_star)
 
     for epoch in range(config['n_epochs_sgd']):
-        w, variance = sgd_epoch_constant(w, X_train, y_train,
-                                 lr=config['sgd_const_lr'],
-                                 lam=lam, multiclass=multiclass, track_variance=True)
+        w, variance = sgd_epoch_constant(
+            w, X_train, y_train,
+            lr=config['sgd_const_lr'], lam=lam,
+            multiclass=multiclass, track_variance=True,
+        )
         ep += 1.0
-        tl, ter = _log(ep, variance)
+        tl, ter = _log_state(result, w, ep, X_train, y_train, X_test, y_test,
+                             lam, multiclass, P_star, variance)
 
         if (epoch + 1) % save_ckpt_every == 0:
-            save_checkpoint('sgd_const', dataset_name, w, ep,
-                            tl, ter, variance, epoch=epoch + 1)
+            save_checkpoint('sgd_const', dataset_name, w, ep, tl, ter, variance, epoch=epoch + 1)
             clean_checkpoints('sgd_const', dataset_name)
 
         if (epoch + 1) % 10 == 0:
-            print(f"    epoch {epoch+1:3d} | residual={tl-P_star:.2e} | err={ter:.2f}% | var={variance:.2e}" )
+            print(f"    epoch {epoch+1:3d} | residual={tl-P_star:.2e} | err={ter:.2f}% | var={variance:.2e}")
 
     return result
 
 
 def run_sgd_best(w_init, X_train, y_train, X_test, y_test,
                  config, P_star, dataset_name, save_ckpt_every=5):
-    """Chạy SGD với learning rate giảm dần."""
+    """Run SGD with a decaying learning rate and return a results dict."""
     lam        = config['lam']
     multiclass = config['multiclass']
     n          = X_train.shape[0]
@@ -257,32 +243,21 @@ def run_sgd_best(w_init, X_train, y_train, X_test, y_test,
     w      = w_init.copy()
     ep     = 0.0
     t      = 0
-    result = {'passes': [], 'loss': [], 'loss_residual': [], 'test_error': [], 'grad_variance': []}
-
-    def _log(ep, variance=None):
-        tl  = loss(w, X_train, y_train, lam, multiclass)
-        ter = compute_test_error(w, X_test, y_test, multiclass)
-        result['passes'].append(ep)
-        result['loss'].append(float(tl))
-        result['loss_residual'].append(float(tl - P_star))
-        result['test_error'].append(float(ter))
-        result['grad_variance'].append(float(variance) if variance is not None else None)  # Placeholder, không track variance cho SGD-best
-        return tl, ter
-
-    _log(ep)
+    result = _make_result_dict()
+    _log_state(result, w, ep, X_train, y_train, X_test, y_test, lam, multiclass, P_star)
 
     for epoch in range(config['n_epochs_sgd']):
-        w, t, variance = sgd_epoch_decay(w, X_train, y_train,
-                                          lr0=config['sgd_best_lr0'],
-                                          lam=lam, n=n, t_start=t,
-                                          b=config['sgd_best_b'],
-                               multiclass=multiclass, track_variance=True)
+        w, t, variance = sgd_epoch_decay(
+            w, X_train, y_train,
+            lr0=config['sgd_best_lr0'], lam=lam, n=n, t_start=t,
+            b=config['sgd_best_b'], multiclass=multiclass, track_variance=True,
+        )
         ep += 1.0
-        tl, ter = _log(ep, variance)
+        tl, ter = _log_state(result, w, ep, X_train, y_train, X_test, y_test,
+                             lam, multiclass, P_star, variance)
 
         if (epoch + 1) % save_ckpt_every == 0:
-            save_checkpoint('sgd_best', dataset_name, w, ep,
-                            tl, ter, variance, epoch=epoch + 1)
+            save_checkpoint('sgd_best', dataset_name, w, ep, tl, ter, variance, epoch=epoch + 1)
             clean_checkpoints('sgd_best', dataset_name)
 
         if (epoch + 1) % 10 == 0:
@@ -295,13 +270,18 @@ def run_sgd_best(w_init, X_train, y_train, X_test, y_test,
 # Per-dataset experiment
 # ---------------------------------------------------------------------------
 
-def run_experiment(dataset_name, config, P_star,
-                   models=None, results_dir='results',
-                   save_ckpt_every=5, skip_warmstart=False):
-    """Chạy thí nghiệm cho 1 dataset với các model được chọn.
+def run_experiment(dataset_name, config, P_star, models=None,
+                   results_dir='results', save_ckpt_every=5, skip_warmstart=False):
+    """Run an experiment for one dataset with the specified optimizers.
 
     Args:
-        models: list subset của VALID_MODELS, None = tất cả
+        dataset_name:   name of the dataset to load
+        config:         hyperparameter dict for this dataset
+        P_star:         optimal loss P(w*) for loss-residual computation
+        models:         list of model keys to run (None = all)
+        results_dir:    directory to write JSON results
+        save_ckpt_every: checkpoint frequency in epochs
+        skip_warmstart: skip SVRG warm-start if True
     """
     if models is None:
         models = VALID_MODELS
@@ -312,12 +292,11 @@ def run_experiment(dataset_name, config, P_star,
     print(f"{'='*60}")
 
     X_train, y_train, X_test, y_test = load_dataset(dataset_name)
-    n, d = X_train.shape
+    n, d       = X_train.shape
     multiclass = config['multiclass']
-
     print(f"  n={n}, d={d}, multiclass={multiclass}, λ={config['lam']}")
 
-    # Weight khởi tạo
+    # Zero-initialize weights
     if multiclass:
         K  = len(np.unique(y_train))
         w0 = np.zeros((d, K))
@@ -332,22 +311,18 @@ def run_experiment(dataset_name, config, P_star,
                                       config, P_star, dataset_name,
                                       save_ckpt_every, skip_warmstart),
         'sgd_const': lambda: run_sgd_const(w0, X_train, y_train, X_test, y_test,
-                                           config, P_star, dataset_name,
-                                           save_ckpt_every),
+                                           config, P_star, dataset_name, save_ckpt_every),
         'sgd_best':  lambda: run_sgd_best(w0, X_train, y_train, X_test, y_test,
-                                          config, P_star, dataset_name,
-                                          save_ckpt_every),
+                                          config, P_star, dataset_name, save_ckpt_every),
     }
 
     for model in models:
         all_results[model] = runner_map[model]()
 
-    # Lưu kết quả JSON
     out_path = os.path.join(results_dir, f'{dataset_name}_results.json')
     with open(out_path, 'w') as f:
-        # grad_variance có thể chứa None → dùng default=str
         json.dump(all_results, f, indent=2, default=str)
-    print(f"\n  ✓ Kết quả đã lưu → {out_path}")
+    print(f"\n  ✓ Results saved → {out_path}")
 
     return all_results
 
@@ -356,6 +331,7 @@ def run_experiment(dataset_name, config, P_star,
 # Config override helpers
 # ---------------------------------------------------------------------------
 
+# Maps model key → config key for learning rate and epoch count
 LR_KEY_MAP = {
     'svrg':      'svrg_lr',
     'sgd_const': 'sgd_const_lr',
@@ -370,27 +346,20 @@ EPOCH_KEY_MAP = {
 
 
 def apply_overrides(config, model, lr=None, epochs=None, lam=None):
-    """Trả về bản copy của config với các giá trị được override."""
+    """Return a copy of config with CLI overrides applied."""
     cfg = dict(config)
 
-    if lr is not None:
-        key = LR_KEY_MAP.get(model)
-        if key:
-            old = cfg.get(key)
-            cfg[key] = lr
-            print(f"  [override] {key}: {old} → {lr}")
+    if lr is not None and (key := LR_KEY_MAP.get(model)):
+        print(f"  [override] {key}: {cfg.get(key)} → {lr}")
+        cfg[key] = lr
 
-    if epochs is not None:
-        key = EPOCH_KEY_MAP.get(model)
-        if key:
-            old = cfg.get(key)
-            cfg[key] = epochs
-            print(f"  [override] {key}: {old} → {epochs}")
+    if epochs is not None and (key := EPOCH_KEY_MAP.get(model)):
+        print(f"  [override] {key}: {cfg.get(key)} → {epochs}")
+        cfg[key] = epochs
 
     if lam is not None:
-        old = cfg.get('lam')
+        print(f"  [override] lam: {cfg.get('lam')} → {lam}")
         cfg['lam'] = lam
-        print(f"  [override] lam: {old} → {lam}")
 
     return cfg
 
@@ -402,71 +371,62 @@ def apply_overrides(config, model, lr=None, epochs=None, lam=None):
 def main():
     args = parse_args()
 
-    # --list
     if args.list:
-        print("Datasets hợp lệ:")
+        print("Valid datasets:")
         for ds in DATASET_CONFIGS:
             print(f"  {ds}")
-        print("\nModels hợp lệ:")
+        print("\nValid models:")
         for m in VALID_MODELS:
             print(f"  {m}")
         return
 
-    # Xác định datasets cần chạy
+    # Resolve datasets and models to run
     if args.dataset is not None:
         if args.dataset not in DATASET_CONFIGS:
-            print(f"ERROR: Dataset '{args.dataset}' không hợp lệ.")
-            print(f"       Hợp lệ: {list(DATASET_CONFIGS.keys())}")
+            print(f"ERROR: Unknown dataset '{args.dataset}'. "
+                  f"Valid options: {list(DATASET_CONFIGS.keys())}")
             return
         datasets = [args.dataset]
     else:
         datasets = list(DATASET_CONFIGS.keys())
 
-    # Xác định models cần chạy
     models = [args.model] if args.model else VALID_MODELS
 
-    # Load optimal losses
+    # Load precomputed optimal losses
     optimal_path = os.path.join(args.results_dir, 'optimal_loss.json')
     if not os.path.exists(optimal_path):
-        print(f"ERROR: Không tìm thấy {optimal_path}. Chạy compute_optimal.py trước.")
+        print(f"ERROR: {optimal_path} not found. Run compute_optimal.py first.")
         return
 
     with open(optimal_path) as f:
         optimal_losses = json.load(f)
 
-    # Vòng lặp chính
+    # Main loop
     all_results = {}
     for ds in datasets:
         base_config = dict(DATASET_CONFIGS[ds])
         P_star      = optimal_losses[ds]['P_star']
 
-        # Override config nếu có (override áp dụng cho từng model riêng)
         if args.lr is not None or args.epochs is not None or args.lam is not None:
-            # Nếu chỉ chạy 1 model → override rõ ràng
-            # Nếu chạy nhiều model → override lần lượt từng model
-            merged_config = base_config.copy()
+            config = base_config.copy()
             for m in models:
-                merged_config = apply_overrides(
-                    merged_config, m,
-                    lr=args.lr, epochs=args.epochs, lam=args.lam
-                )
-            config = merged_config
+                config = apply_overrides(config, m, lr=args.lr,
+                                         epochs=args.epochs, lam=args.lam)
         else:
             config = base_config
 
-        result = run_experiment(
-            dataset_name   = ds,
-            config         = config,
-            P_star         = P_star,
-            models         = models,
-            results_dir    = args.results_dir,
-            save_ckpt_every= args.save_ckpt_every,
-            skip_warmstart = args.no_warmstart,
+        all_results[ds] = run_experiment(
+            dataset_name    = ds,
+            config          = config,
+            P_star          = P_star,
+            models          = models,
+            results_dir     = args.results_dir,
+            save_ckpt_every = args.save_ckpt_every,
+            skip_warmstart  = args.no_warmstart,
         )
-        all_results[ds] = result
 
     print(f"\n{'='*60}")
-    print("Hoàn thành tất cả thí nghiệm.")
+    print("All experiments complete.")
     print(f"{'='*60}")
 
 

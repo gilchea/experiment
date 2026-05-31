@@ -1,86 +1,81 @@
 """
 sgd.py — SGD Baselines (Constant & Decaying Learning Rates)
 
-Implements two SGD variants used as baselines in the paper (NIPS 2013):
-1. SGD (Constant): Fixed learning rate throughout training.
-2. SGD-best (Decaying): t-inverse schedule eta(t) = eta_0 / (1 + b * t/n)
+Implements two SGD variants used as baselines (NIPS 2013):
+  1. SGD-const : fixed learning rate throughout training.
+  2. SGD-best  : exponential decay schedule eta(t) = eta_0 * b^(epoch).
 
-Per PROCEDURE_SGD_.md:
-    - Batch size = 1 for convex problems (logistic regression).
-    - X-axis in plots = #grad / n (effective passes).
+Per paper conventions:
+  - Batch size = 1 for convex problems (logistic regression).
+  - X-axis in plots = #grad_evals / n  (effective passes over the dataset).
 """
 
 import numpy as np
 from models.logistic import stoch_grad, full_grad
 
-# ---------------------------------------------------------------------------
-# SGD with Constant Learning Rate
-# ---------------------------------------------------------------------------
-def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False, track_variance=True):
-    """Run 1 epoch of SGD with constant learning rate.
 
-    Per spec: batch_size = 1, w^(t) = w^(t-1) - eta * grad_psi_i(w^(t-1))
+# ---------------------------------------------------------------------------
+# SGD — Constant Learning Rate
+# ---------------------------------------------------------------------------
+
+def sgd_epoch_constant(w, X, y, lr, lam, multiclass=False, track_variance=True):
+    """Run one epoch of SGD with a constant learning rate.
+
+    Update rule: w <- w - lr * grad_psi_i(w)  for i drawn uniformly at random.
 
     Args:
-        w          : weight vector/matrix
-        X          : feature matrix (n, d)
-        y          : label vector (n,)
-        lr         : constant learning rate eta
-        lam        : L2 regularization strength
-        multiclass : whether multi-class
-        track_variance : whether to track gradient variance
+        w:              weight vector/matrix
+        X:              feature matrix (n, d)
+        y:              label vector (n,)
+        lr:             constant learning rate
+        lam:            L2 regularization strength
+        multiclass:     whether to use multi-class logistic regression
+        track_variance: whether to estimate gradient variance
 
     Returns:
-        updated w, epoch_variance
+        w:                updated weights after one epoch
+        epoch_variance:   average squared step norm (0.0 if track_variance=False)
     """
     n = len(y)
-    
-    indices = np.random.permutation(n)
     variance_sum = 0.0
-    variance_count = 0
 
-    for i in indices:
-        # 1. Lấy gradient ngẫu nhiên của mẫu i
+    for i in np.random.permutation(n):
         g = stoch_grad(w, X[i], y[i], lam, multiclass)
 
-        # 2. Đo đạc phương sai (nếu bật tính năng track)
         if track_variance:
-            # E_g = full_grad(w, X, y, lam, multiclass)
-            # diff = g - E_g
-            diff = g * lr  # Var(lr * g) = lr^2 * ||g - E[g]||^2, nhưng vì E[g] ≈ 0 khi w gần tối ưu, nên diff ≈ g * lr
-            # Định nghĩa thực nghiệm gốc bao gồm biến thiên học tốc: Var(lr * g)
-            actual_update_variance = np.sum(diff * diff)
-            variance_sum += actual_update_variance
-            variance_count += 1
+            # Proxy for update variance: ||lr * g||^2
+            variance_sum += np.sum((lr * g) ** 2)
 
-        # 3. Cập nhật trọng số
         w = w - lr * g
 
-    epoch_variance = variance_sum / max(variance_count, 1) if track_variance else 0.0
+    epoch_variance = variance_sum / n if track_variance else 0.0
     return w, epoch_variance
 
-def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None, track_variance=True):
-    """Run multiple epochs of SGD with constant learning rate.
+
+def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False,
+                 callback=None, track_variance=True):
+    """Run multiple epochs of SGD with a constant learning rate.
 
     Args:
-        w          : initial weights
-        X          : feature matrix (n, d)
-        y          : labels (n,)
-        lr         : constant learning rate
-        lam        : regularization
-        n_epochs   : number of epochs
-        multiclass : multi-class flag
-        callback   : optional function(w, epoch) called after each epoch
-        track_variance : whether to track gradient variance
+        w:              initial weights
+        X:              feature matrix (n, d)
+        y:              label vector (n,)
+        lr:             constant learning rate
+        lam:            L2 regularization strength
+        n_epochs:       number of training epochs
+        multiclass:     multi-class flag
+        callback:       optional function(w, epoch) called after each epoch
+        track_variance: whether to track per-epoch gradient variance
 
-     Returns:
-            Nếu track_variance=False: trả về final_w
-            Nếu track_variance=True : trả về (final_w, danh_sách_variance_qua_mỗi_epoch)   
+    Returns:
+        w:          final weights
+        variances:  list of per-epoch variance estimates (only if track_variance=True)
     """
-
     variances = []
+
     for epoch in range(n_epochs):
         w, epoch_var = sgd_epoch_constant(w, X, y, lr, lam, multiclass, track_variance)
+
         if track_variance:
             variances.append(epoch_var)
         if callback:
@@ -88,95 +83,88 @@ def sgd_constant(w, X, y, lr, lam, n_epochs, multiclass=False, callback=None, tr
 
     if track_variance:
         return w, variances
-    
     return w
 
 
 # ---------------------------------------------------------------------------
-# SGD with Decaying Learning Rate  (SGD-best)
+# SGD — Decaying Learning Rate (SGD-best)
 # ---------------------------------------------------------------------------
 
-def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False, track_variance=True):
-    """Run 1 epoch of SGD with t-inverse decaying learning rate.
+def sgd_epoch_decay(w, X, y, lr0, lam, n, t_start, b, multiclass=False,
+                    track_variance=True):
+    """Run one epoch of SGD with an exponential decaying learning rate.
 
-    Per PROCEDURE_SGD_.md, t-inverse schedule:
-        eta(t) = eta_0 / (1 + b * t / n)
-    where t = total gradient steps so far, n = dataset size.
+    Decay schedule: eta(t) = lr0 * b^(epoch)
+    where epoch = t // n  (integer number of complete passes so far).
 
     Args:
-        w          : weight vector/matrix
-        X          : feature matrix (n, d)
-        y          : label vector (n,)
-        lr0        : initial learning rate eta_0
-        lam        : L2 regularization strength
-        n          : dataset size (used for normalizing t in schedule)
-        t_start    : total gradient steps before this epoch
-        b          : decay parameter
-        multiclass : whether multi-class
+        w:              weight vector/matrix
+        X:              feature matrix (n, d)
+        y:              label vector (n,)
+        lr0:            initial learning rate
+        lam:            L2 regularization strength
+        n:              dataset size (used to compute the current epoch index)
+        t_start:        total gradient steps taken before this epoch
+        b:              decay multiplier per epoch (0 < b < 1)
+        multiclass:     multi-class flag
+        track_variance: whether to estimate gradient variance
 
     Returns:
-        (updated w, t_end)
+        w:              updated weights after one epoch
+        t_end:          total gradient steps after this epoch
+        epoch_variance: average squared step norm (0.0 if track_variance=False)
     """
-    indices = np.random.permutation(n)
+    variance_sum = 0.0
     t = t_start
 
-    variance_sum = 0.0
-    variance_count = 0
-    
-    for i in indices:
-        # Tính toán học tốc tại bước t
+    for i in np.random.permutation(n):
         lr_t = lr0 * (b ** (t // n))
-        
-        # 1. Lấy gradient ngẫu nhiên của mẫu i
         g = stoch_grad(w, X[i], y[i], lam, multiclass)
-        
-        # 2. Đo đạc phương sai (nếu bật tính năng track)
-        if track_variance:
-            # E_g = full_grad(w, X, y, lam, multiclass)
-            # diff = g - E_g
-            diff = g * lr_t  # Var(lr_t * g) = lr_t^2 * ||g - E[g]||^2, nhưng vì E[g] ≈ 0 khi w gần tối ưu, nên diff ≈ g * lr_t
-            # Định nghĩa thực nghiệm gốc bao gồm biến thiên học tốc: Var(lr_t * g)
-            actual_update_variance = np.sum(diff * diff)
-            variance_sum += actual_update_variance
-            variance_count += 1
 
-        # 3. Cập nhật trọng số
+        if track_variance:
+            variance_sum += np.sum((lr_t * g) ** 2)
+
         w = w - lr_t * g
         t += 1
 
-    epoch_variance = variance_sum / max(variance_count, 1) if track_variance else 0.0
+    epoch_variance = variance_sum / n if track_variance else 0.0
     return w, t, epoch_variance
 
 
-def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False, callback=None, track_variance=True):
-    """Run multiple epochs of SGD with t-inverse decaying learning rate.
+def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False,
+              callback=None, track_variance=True):
+    """Run multiple epochs of SGD with an exponential decaying learning rate.
 
     Args:
-        w          : initial weights
-        X          : feature matrix (n, d)
-        y          : labels (n,)
-        lr0        : initial learning rate eta_0
-        lam        : regularization
-        n_epochs   : number of epochs
-        b          : decay parameter
-        multiclass : multi-class flag
-        callback   : optional function(w, epoch) called after each epoch
-        track_variance : whether to track gradient variance
+        w:              initial weights
+        X:              feature matrix (n, d)
+        y:              label vector (n,)
+        lr0:            initial learning rate
+        lam:            L2 regularization strength
+        n_epochs:       number of training epochs
+        b:              decay multiplier per epoch
+        multiclass:     multi-class flag
+        callback:       optional function(w, epoch) called after each epoch
+        track_variance: whether to track per-epoch gradient variance
 
     Returns:
-        final weights
+        w:          final weights
+        variances:  list of per-epoch variance estimates (only if track_variance=True)
     """
     n = len(y)
     t = 0
     variances = []
-    
+
     for epoch in range(n_epochs):
-        w, t, epoch_var = sgd_epoch_decay(w, X, y, lr0, lam, n, t, b, multiclass, track_variance)
+        w, t, epoch_var = sgd_epoch_decay(
+            w, X, y, lr0, lam, n, t, b, multiclass, track_variance
+        )
+
         if track_variance:
             variances.append(epoch_var)
         if callback:
             callback(w, epoch)
-            
+
     if track_variance:
         return w, variances
     return w
@@ -187,18 +175,18 @@ def sgd_decay(w, X, y, lr0, lam, n_epochs, b, multiclass=False, callback=None, t
 # ---------------------------------------------------------------------------
 
 def warm_start(X, y, lam, multiclass=False, n_epochs=1, lr=0.01):
-    """Run SGD warm-start (1-10 epochs per paper setup).
+    """Run a short SGD warm-start before the main optimizer.
 
     Args:
-        X          : feature matrix (n, d)
-        y          : labels (n,)
-        lam        : regularization
-        multiclass : multi-class flag
-        n_epochs   : number of warm-start epochs (1 for convex, 10 for NN)
-        lr         : learning rate for warm-start
+        X:          feature matrix (n, d)
+        y:          label vector (n,)
+        lam:        L2 regularization strength
+        multiclass: multi-class flag
+        n_epochs:   number of warm-start epochs (1 for convex, 10 for NN)
+        lr:         learning rate for warm-start
 
     Returns:
-        warmed-up weights
+        warmed-up weight vector/matrix (initialized at zero before warm-start)
     """
     d = X.shape[1]
     if multiclass:
@@ -211,9 +199,9 @@ def warm_start(X, y, lam, multiclass=False, n_epochs=1, lr=0.01):
 
 
 # ---------------------------------------------------------------------------
-# Effective Passes Counting
+# Effective Passes Counter
 # ---------------------------------------------------------------------------
 
 def count_effective_passes_sgd(n_epochs):
-    """For SGD, 1 epoch = 1 effective pass (n grad evals / n)."""
+    """Return effective passes for SGD (1 epoch = 1 pass = n gradient evals)."""
     return n_epochs
