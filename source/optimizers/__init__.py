@@ -10,9 +10,9 @@ from .svrg import (
     svrg_outer_loop,
     effective_passes_svrg,
 )
-from .sdca import (
-    sdca_train,
-)
+# from .sdca import (
+#     sdca_train,
+# )
 
 from .svrg_nn import (
     svrg_nn_outer_loop,
