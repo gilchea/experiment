@@ -9,6 +9,7 @@ precompute phi'(w_tilde^T x_i) for all i to reduce inner-loop cost.
 """
 
 import numpy as np
+import scipy.sparse as sp
 from models.logistic import sigmoid
 
 
@@ -65,6 +66,12 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
         xi = X[i]          # (d,) — dense 1D array
         yi = y[i]
 
+        # KHẮC PHỤC BUG: Nếu xi là ma trận thưa (Sparse CSR row), đưa về 1D mảng phẳng NumPy
+        if sp.issparse(xi):
+            xi = xi.toarray().ravel()
+        else:
+            xi = np.asarray(xi).ravel()
+
         # nabla psi_i(w) = -y_i * sigmoid(-y_i * w^T x_i) * x_i + lam * w
         margin_w = yi * (xi @ w)
         g_current = (-yi * sigmoid(-margin_w)) * xi + lam * w
@@ -80,9 +87,17 @@ def svrg_outer_loop_binary(w_tilde, X, y, lr, lam, m, option='I',
         # Since E[v] ≈ mu (full gradient at current snapshot),
         # we estimate variance as average squared deviation from mu
         if track_variance:
+            # diff = v - mu
+            # # variance_sum += lr * np.dot(diff, diff)
+            # variance_sum += lr * np.sum(diff * diff)
+            # variance_count += 1
             diff = v - mu
-            # variance_sum += lr * np.dot(diff, diff)
-            variance_sum += lr * np.sum(diff * diff)
+            # Sử dụng np.asarray(diff) để đảm bảo không bị dính kiểu dữ liệu ma trận cũ
+            diff = np.asarray(diff).ravel()
+            
+            # Biến thiên bình phương thực tế của cập nhật: Var(lr * v)
+            actual_update_variance = (lr ** 2) * np.sum(diff * diff)
+            variance_sum += actual_update_variance
             variance_count += 1
 
         # SVRG update: w = w - lr * v
