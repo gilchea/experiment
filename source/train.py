@@ -6,8 +6,6 @@ Orchestrates all experiments:
 2. Runs warm-start SGD
 3. Runs SVRG (multiple outer iterations) with gradient variance tracking
 4. Runs SGD baselines (constant + decaying)
-5. Runs SDCA baseline
-6. Runs SAG baseline
 7. Logs loss residuals, test errors, and effective passes
 8. Saves checkpoints periodically
 9. Saves results for plotting
@@ -21,8 +19,6 @@ from utils.data_loader import load_dataset
 from models.logistic import loss
 from optimizers.sgd import sgd_epoch_constant, sgd_epoch_decay, warm_start
 from optimizers.svrg import svrg_outer_loop, effective_passes_svrg
-from optimizers.sdca import sdca_train, count_effective_passes_sdca
-# from optimizers.sag import sag_train
 from config import DATASET_CONFIGS
 
 
@@ -197,8 +193,6 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
                  'grad_variance': []},
         'sgd_const': {'passes': [], 'loss_residual': [], 'test_error': []},
         'sgd_best': {'passes': [], 'loss_residual': [], 'test_error': []},
-        'sdca': {'passes': [], 'loss_residual': [], 'test_error': []},
-        'sag': {'passes': [], 'loss_residual': [], 'test_error': []},
     }
 
     # ── Run SVRG ──
@@ -246,9 +240,10 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
                   f"test error = {test_err:.2f}%, variance = {variance:.2e}")
 
     # ── Run SGD (Constant eta) ──
+    # Không dùng warm-start cho SGD để có baseline rõ ràng
     print(f"\n  Running SGD (constant eta={config['sgd_const_lr']})...")
-    w_sgd_const = w.copy()
-    effective_pass = config['warm_start_epochs']
+    w_sgd_const = w0.copy()
+    effective_pass = 0.0  # Start counting from zero for SGD
 
     train_loss = loss(w_sgd_const, X_train, y_train, lam, multiclass)
     test_err = compute_test_error(w_sgd_const, X_test, y_test, multiclass)
@@ -281,8 +276,8 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
 
     # ── Run SGD (Best / Decaying eta) ──
     print(f"\n  Running SGD-best (eta_0={config['sgd_best_lr0']}, b={config['sgd_best_b']})...")
-    w_sgd_best = w.copy()
-    effective_pass = config['warm_start_epochs']
+    w_sgd_best = w0.copy()
+    effective_pass = 0.0
     t = 0  # Total gradient evaluations
 
     train_loss = loss(w_sgd_best, X_train, y_train, lam, multiclass)
@@ -315,81 +310,6 @@ def run_experiment(dataset_name, config, P_star, results_dir='results',
                             effective_pass, train_loss, test_err, None,
                             epoch=epoch + 1)
             clean_checkpoints('sgd_best', dataset_name, keep_last=2)
-
-    # ── Run SDCA ──
-    print(f"\n  Running SDCA...")
-    w_sdca = w.copy()
-    effective_pass = config['warm_start_epochs']
-
-    train_loss = loss(w_sdca, X_train, y_train, lam, multiclass)
-    test_err = compute_test_error(w_sdca, X_test, y_test, multiclass)
-    results['sdca']['passes'].append(effective_pass)
-    results['sdca']['loss_residual'].append(float(train_loss - P_star))
-    results['sdca']['test_error'].append(float(test_err))
-
-    # SDCA uses callbacks to log per-epoch progress
-    n_epochs_sdca = config['n_epochs_sdca']
-    log_interval = max(1, n_epochs_sdca // 30)
-
-    def sdca_callback(w_curr, epoch):
-        nonlocal effective_pass
-        effective_pass = config['warm_start_epochs'] + count_effective_passes_sdca(epoch + 1)
-        loss_curr = loss(w_curr, X_train, y_train, lam, multiclass)
-        err_curr = compute_test_error(w_curr, X_test, y_test, multiclass)
-
-        results['sdca']['passes'].append(effective_pass)
-        results['sdca']['loss_residual'].append(float(loss_curr - P_star))
-        results['sdca']['test_error'].append(float(err_curr))
-
-        if (epoch + 1) % log_interval == 0 or epoch + 1 == n_epochs_sdca:
-            print(f"    SDCA epoch {epoch+1:3d}: loss residual = {loss_curr - P_star:.2e}, "
-                  f"test error = {err_curr:.2f}%")
-
-    w_sdca = sdca_train(X_train, y_train, lam, n_epochs_sdca,
-                        multiclass=multiclass, callback=sdca_callback)
-
-    # ── Run SAG ──
-    print(f"\n  Running SAG (lr={config['sag_lr']})...")
-    w_sag = w.copy()
-    effective_pass = config['warm_start_epochs']
-
-    train_loss = loss(w_sag, X_train, y_train, lam, multiclass)
-    test_err = compute_test_error(w_sag, X_test, y_test, multiclass)
-    results['sag']['passes'].append(effective_pass)
-    results['sag']['loss_residual'].append(float(train_loss - P_star))
-    results['sag']['test_error'].append(float(test_err))
-
-    # SAG uses callbacks to log per-epoch progress
-    n_epochs_sag = config['n_epochs_sag']
-    log_interval = max(1, n_epochs_sag // 30)
-
-    def sag_callback(w_curr, epoch):
-        nonlocal effective_pass
-        effective_pass = config['warm_start_epochs'] + epoch + 1
-        loss_curr = loss(w_curr, X_train, y_train, lam, multiclass)
-        err_curr = compute_test_error(w_curr, X_test, y_test, multiclass)
-
-        results['sag']['passes'].append(effective_pass)
-        results['sag']['loss_residual'].append(float(loss_curr - P_star))
-        results['sag']['test_error'].append(float(err_curr))
-
-        if (epoch + 1) % log_interval == 0 or epoch + 1 == n_epochs_sag:
-            print(f"    SAG epoch {epoch+1:3d}: loss residual = {loss_curr - P_star:.2e}, "
-                  f"test error = {err_curr:.2f}%")
-
-    # w_sag = sag_train(X_train, y_train, lam, n_epochs_sag,
-    #                   multiclass=multiclass, lr=config['sag_lr'],
-    #                   callback=sag_callback)
-
-    # ── Save results ──
-    os.makedirs(results_dir, exist_ok=True)
-    filepath = os.path.join(results_dir, f'{dataset_name}_results.json')
-    with open(filepath, 'w') as f:
-        json.dump(results, f, indent=2, default=lambda x: float(x) if x is not None else None)
-    print(f"\n  [V] Results saved to {filepath}")
-
-    return results
-
 
 def run_all_experiments():
     """Run experiments for all datasets."""
